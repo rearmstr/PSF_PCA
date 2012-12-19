@@ -11,6 +11,8 @@
 
 #include <vector>
 
+#include <ctype.h>
+
 #include "myClass.h"
 #include "myTypeDef.h"
 #include "NR.h"
@@ -701,7 +703,7 @@ void readFileNames(c_inFileName &inName, c_outFileName &outName,
             // for (int i=0; i<line.length(); i++)         // remove white spaces
             //     if (line[i] == ' ') line.erase(i,1);
             // OR use the following to remove white spaces
-            line.erase(remove_if(line.begin(), line.end(), isspace), line.end());
+            line.erase(remove_if(line.begin(), line.end(), ::isspace), line.end());
 
             tempVec.push_back(line);
         }
