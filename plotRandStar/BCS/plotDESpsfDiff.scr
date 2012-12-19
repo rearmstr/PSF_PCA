@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# plot PSF whiskers of the data and residual for an exposure
+#    modify mc, nc in $fileName manually
+#
+IDexp=$1
+fileName="prepDESpsfDiff"
+dataDir="/data/mzm/BCS/BCS_r_new"
+expNameList="../../rlist_new"
+# expNameList="../../bcsExpList_z"
+#
+nChips=8
+mc=10
+nc=20
+nShapeLet=2
+#
+# prepare starRec for the exposure
+#
+grep -w "^${IDexp}" < ${dataDir}/starRec > starXYe12.dat
+#
+sed -i -e "s/IDexp=.*)/IDexp=${IDexp}\)/g" ${fileName}.f
+sed -i -e "s/nChips=.*)/nChips=${nChips},mc=${mc},nc=${nc},nShapeLet=${nShapeLet}\)/g" ${fileName}.f
+sed -i -e "s#inputE12recon=\".*\"#inputE12recon=\"${dataDir}\/reconEM\"#g" ${fileName}.f
+#
+make ${fileName}
+${fileName}
+#
+# sed -i -e "s#set out \".*\"#set out \"\/data\/mzm\/plot\/whisker_${IDexp}\.png\"#g" plotDESwhisker.p
+sed -i -e "s#set out \".*\"#set out \"\/astro\/tutti0\/www\/mzm\/temp_bcs_r_new\/whisker_${IDexp}\.png\"#g" plotDESwhisker.p
+expName=$(sed -n "${IDexp}p" ${expNameList})
+sed -i -e "s#BCS.*\"#${expName}\"#g" plotDESwhisker.p
+gnuplot plotDESwhisker.p
+#
+if [ -e "${fileName}.f-e" ]
+then rm "${fileName}.f-e"
+fi

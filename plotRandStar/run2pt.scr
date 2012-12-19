@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# plot the 2pt residual ellipticity correlation function of an exposure
+#
+IDexp=$1
+fileName="calDES2pt"
+dataDir="/data/mzm/DES_20x40_681_2Eigen"
+# dataDir="/data/mzm"
+#
+nChips=62
+mc=20
+nc=40
+nShapeLet=2
+nr=100
+rmax="2.3"
+#
+# prepare starRec for the exposure
+#
+grep -w "^${IDexp}" < ${dataDir}/starRec > tempStarRec
+# setup scipy
+# setup esutil -r ~esheldon/exports/esutil-local
+awk '{ print $2, $5, $6 }' < tempStarRec > xy.dat
+cat xy.dat | genDESccd_xy/image2sky-example.py > ra_dec.dat
+awk '{ print $4, $5 }' < ra_dec.dat > starXY
+paste tempStarRec starXY > starXYe12.dat
+#
+sed -i -e "s/IDexp=.*)/IDexp=${IDexp}\)/g" ${fileName}.f
+sed -i -e "s/nChips=.*)/nChips=${nChips},mc=${mc},nc=${nc},nShapeLet=${nShapeLet},nr=${nr}\)/g" ${fileName}.f
+sed -i -e "s#inputE12recon=\".*\"#inputE12recon=\"${dataDir}\/reconEM\"#g" ${fileName}.f
+sed -i -e "s/rmax=.*$/rmax=${rmax}/g" ${fileName}.f
+#
+make ${fileName}
+${fileName}
+#
+gnuplot plot2pt.p
+#
+if [ -e "${fileName}.f-e" ]
+then rm "${fileName}.f-e"
+fi

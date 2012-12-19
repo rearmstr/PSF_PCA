@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# plot an eigen image
+# arg provide the eigen ID
+# edit file prepEigenDiff.f to change the inputfile of the eigens.
+#
+IDeigen=$1
+scale=$2
+fileName="prepEigen"
+ 
+  sed -i -e "s/IDeigen=.*)/IDeigen=${IDeigen}\)/g" ${fileName}.f
+  sed -i -e "s/scale=.*/scale=${scale}/g" ${fileName}.f
+ 
+  make ${fileName}
+  ${fileName} 
+  gnuplot plotEigenImg.p
+  # mv whiskerEigen.dat whiskerEigen_${IDeigen}.dat
+#
+if [ -e "${fileName}.f-e" ]
+then rm ${fileName}.f-e
+fi

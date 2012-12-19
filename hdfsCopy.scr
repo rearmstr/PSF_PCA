@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+srcFile=$1
+destFile=$2
+hadoop fs -get $srcFile $destFile
+#
+# Instruction from Erin Sheldon
+#
+# To set up hadoop
+#
+#    source /opt/astro/SL53/bin/setup.hadoop.sh
+#
+# I usually use an alias for file system stuff
+#    alias hdfs='hadoop fs'
+#
+# To copy a file
+#    hdfs -get src dest
+#
+# Here is bash example using the new DESDATA
+#
+#   DESDATA=hdfs:///user/esheldon/DES
+#   run=se015it
+#   expname=decam--32--47-i-5
+#   ccd=59
+#   src=$DESDATA/wlbnl/$run/$expname/$run-$expname-$ccd-psf.fits
+#   dest=/tmp/$run-$expname-$ccd-psf-$RANDOM.fits
+# 
+#   hdfs -get  $src $dest
+# 
+# 
+# You can translate to c++ using system()

@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+# plot all the reconstruction images
+#
+Nexp=681
+#
+iexp=639
+while [ $iexp -lt $Nexp ]
+do
+   iexp=`expr $iexp + 1`
+   plotDESpsfDiff_D12.scr $iexp
+done

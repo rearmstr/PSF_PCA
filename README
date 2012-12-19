@@ -1,0 +1,146 @@
+c-----------------------------------------------------------------------
+c This parallel C++ package is used for PSF interpolation using PCA.
+c This is the 2nd release of the software (v1). 
+c Author: Zhaoming Ma (mzm@bnl.gov)
+c Date: Dec 18, 2012
+c 
+c Table of Content
+c
+c   - Download the package
+c   - Compile
+c   - Run the code
+c   - List of source code
+c   - Output
+c
+c-------------------- Download the package -----------------------------
+c Point your browser to
+c
+c     http://www.cosmo.bnl.gov/www/mzm/PSF_PCA/PSF_PCA_v1.tar.gz
+c
+c to download the software. Then untar the downloaded package by running
+
+     gunzip PSF_PCA_v1.tar.gz
+     tar -xvf PSF_PCA_v1.tar
+
+c A directory named PSF_PCA_v1 will be created containing the source code.
+c
+c-------------------- Compile -----------------------------------------
+c First, the code requires the following software packages installed,
+c     1) MPICH2
+c        http://www.mcs.anl.gov/research/projects/mpich2/
+c     2) TMV (it needs BLAS - Basic Linear Algebra Subprograms)
+c        http://code.google.com/p/tmv-cpp/
+c     3) CCfits (it needs cfitsio)
+c        http://heasarc.gsfc.nasa.gov/docs/software/fitsio/ccfits/
+c
+c After installing the required packages, modify the Makefile to set
+c the appropriate GCC command and flags, INCLUDE path, and LIBS.
+c
+c Finally, you can compile the code by typing "make" on the command line.
+c The excutable PSF_PCA will be generated as the result.
+c 
+c-------------------- Run the code -------------------------------------
+c Before running the code, parameters in 2 parameter files and two data
+c files have to be set correctly. They are the following,
+c
+c fileName.par - contains the input and output directories, file names.
+c                Comment lines starting with # are used to explain what
+c                each entry is. In particular, file name for control
+c                parameter (controParamFile), and the file names for the
+c                two data files (chipBoundFile and DESexpListFile) are
+c                all specified here.
+c                Warning: make sure the output directory exists.
+c
+c inputParams.par - listed in fileName.par as controlParamFile. This is
+c                the default name. If the entry in fileName.par was changed,
+c                then you should edit the corresponding file instead.
+c                This parameter file specify all of the parameter values
+c                controling the behavior of the code. Comment lines
+c                starting with # are used to explain what each entry is.
+c
+c DESchipBound.dat - list of lower left and upper right corner coordinates
+c                of the CCD chips. Again, the file name is specified in
+c                fileName.par. Make appropriate adjustment if the name is
+c                changed. For DES, these values are pixel coordinates.
+c                For the test on SNAP simulations, these values are in
+c                meters.
+c
+c DESpointingList - list of DES exposure names. These names are part of
+c                the path to DES data. The full path to an exposure is
+c                ${dirBaseDES}${runID_DES}/${DES_exposure_name}, where
+c                dirBaseDES, runID_DES are specified in fileName.par
+c
+c NOTE: there are two additional parameters in the function read_des_exp()
+c       in initialize.cpp, DESorBCS and icReadFromHDFS. They should be
+c       pulled out and included in inputParams.par in future releases, but
+c       for now you have to edit the source code to set them to desired
+c       values.
+c                
+c After preparing these files, run the code by the following command,
+
+     mpiexec -n ${number_of_process} PSF_PCA
+c
+c If you are using the astro cluster at BNL which uses wq to schedule
+c jobs, you can use the included "submitMPIjob.wq" to run the code. 
+c To submit the job to the wq queue, type
+
+     nohup wq sub submitMPIjob.wq &> logfile &
+c
+c-------------------- List of source code ------------------------------
+c Here is the list of source codes and brief description of what each
+c does.
+c
+c PSF_PCA.cpp
+c     This is the main program that initializes MPI, data matrices, and
+c     call the PCA routines.
+c
+c initialize.cpp
+c     Contains routines that read the input parameter and data.
+c
+c myIO.cpp
+c     Contains input and output routines.
+c
+c NR.cpp
+c     Canned routines (random number, sort ...) from Numerical
+c     Recipe (NR) etc.
+c
+c PCAcommon.cpp
+c     Routines commonly used by EM, SVD and Wiberg's method.
+c
+c PCAuseEM.cpp
+c     PSF reconstruction using EM PCA.
+c
+c PCAuseSVD.cpp
+c     PSF reconstruction using SVD PCA
+c
+c PCAuseWiberg.cpp
+c     PSF reconstruction using Wiberg's algorithm.
+c     This hasn't been tested and is not being updated.
+c
+c rmDefocus.cpp
+c     Subtract the defocus pattern before doing PCA.
+c
+c myClass.h
+c     Contains all the class definitions.
+c
+c------------------ Output ---------------------------------------------
+c The output provides the PSF values over a grid on the focal plane.
+c
+c gridXY2
+c     Contains the grid coordinates. Each row has the lower and upper
+c     corners of a grid cell. For DES, the output are pixel coordinates.
+c     So one need to provide the WCS information to translate this into
+c     real positions on the focal plane. This is not included in this
+c     release.
+c
+c reconEM and reconSVD
+c     These are the reconstructed PSF values. reconSVD is calculated
+c     only when there is no missing data and icSVD is set. Each line
+c     contains the PSF values of a single exposure. The PSF values
+c     are arranged such that all the e1 are outputed then all the e2
+c     follow.
+c
+c What are in the rest of the output files are briefly described in
+c fileName.par.
+c
+c-------------------------- EOF ----------------------------------------

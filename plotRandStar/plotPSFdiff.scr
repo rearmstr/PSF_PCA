@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# plot PSF whiskers of the data and residual for an exposure
+#
+IDexp=$1
+fileName="prepPSFdiff"
+#
+sed -i -e "s/IDexp=.*)/IDexp=${IDexp}\)/g" ${fileName}.f
+#
+make ${fileName}
+${fileName}
+#
+gnuplot plotWhisker.p
+#
+if [ -e "${fileName}.f-e" ]
+then rm "${fileName}.f-e"
+fi

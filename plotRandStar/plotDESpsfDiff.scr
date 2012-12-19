@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# plot PSF whiskers of the data and residual for an exposure
+#    modify mc, nc in $fileName manually
+#
+IDexp=$1
+fileName="prepDESpsfDiff"
+dataDir="/data/mzm/DES_3x6_400"
+#
+nChips=62
+mc=3
+nc=6
+nShapeLet=2
+#
+# prepare starRec for the exposure
+#
+grep -w "^${IDexp}" < ${dataDir}/starRec > tempStarRec
+# setup scipy
+# setup esutil -r ~esheldon/exports/esutil-local
+awk '{ print $2, $5, $6 }' < tempStarRec > xy.dat
+cat xy.dat | genDESccd_xy/image2sky-example.py > ra_dec.dat
+awk '{ print $4, $5 }' < ra_dec.dat > starXY
+paste tempStarRec starXY > starXYe12.dat
+#
+sed -i -e "s/IDexp=.*)/IDexp=${IDexp}\)/g" ${fileName}.f
+sed -i -e "s/nChips=.*)/nChips=${nChips},mc=${mc},nc=${nc},nShapeLet=${nShapeLet}\)/g" ${fileName}.f
+sed -i -e "s#inputE12recon=\".*\"#inputE12recon=\"${dataDir}\/reconEM\"#g" ${fileName}.f
+#
+make ${fileName}
+${fileName}
+#
+# sed -i -e "s#set out \".*\"#set out \"\/data\/mzm\/plot\/whisker_${IDexp}\.png\"#g" plotDESwhisker.p
+sed -i -e "s#set out \".*\"#set out \"\/astro\/tutti0\/www\/mzm\/temp\/whisker_${IDexp}\.png\"#g" plotDESwhisker.p
+expName=$(sed -n "${IDexp}p" ../DESpointingList)
+sed -i -e "s#decam.*\"#${expName}\"#g" plotDESwhisker.p
+gnuplot plotDESwhisker.p
+#
+if [ -e "${fileName}.f-e" ]
+then rm "${fileName}.f-e"
+fi
