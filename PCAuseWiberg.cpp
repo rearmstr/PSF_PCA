@@ -156,13 +156,13 @@ int PCAuseWiberg(c_ControlParam &contParam, c_Data &myData, double tol)
     S = QFG.svd().getU();
     D = QFG.svd().getS();
     // Dvec = QFG.svd().getS().diag();
-    T = QFG.svd().getV();
+    T = QFG.svd().getVt();
     outputToFile (D, "results/D");
 
     cout << "\t\t got here 3\n";
 
     for (i=0; i<(n-kEigen)*(kEigen+1); i++) { D(i,i) = 1.0/D(i,i); }
-    QFGdagger = T.transpose() * D * S.transpose();
+    QFGdagger = T * D * S.transpose();
 
     dvVec=QFGdagger * QF * (yVec - mVec);
 
