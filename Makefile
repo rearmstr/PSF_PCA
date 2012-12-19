@@ -16,8 +16,12 @@ CXXFLAGS = -O3
 # INCLUDE = -I/lsst/u/esheldon/local/products/Linux64/tmv/v0.63/include
 # INCLUDE = -I/astro/u/esheldon/exports/tmv-work/include -I/astro/u/esheldon/local/products/Linux64/ccfits/2.3/include
 # LIBS = -L/astro/u/esheldon/exports/tmv-work/lib -ltmv -ltmv_symband -lblas -lpthread -lCCfits -lcfitsio
-INCLUDE =
-LIBS = -ltmv -ltmv_symband -lblas -lpthread -lCCfits -lcfitsio
+
+# for folio
+INCLUDE = -I/usr/global/tmv/include -I/usr/global/CCfits/include -I/usr/global/cfitsio/include
+LIBS = -L/usr/global/tmv0.71/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
+       -lmkl_sequential -lpthread -Wl,-rpath=/usr/global/tmv0.71/lib \
+       -openmp -L/usr/global/CCfits/lib -lCCfits -L/usr/global/CCfits/lib -lcfitsio
 
 fileName=PSF_PCA
 
