@@ -714,6 +714,12 @@ void readFileNames(c_inFileName &inName, c_outFileName &outName,
         exit(1);
      }
 
+     if(tempVec.size()!=28) {
+       cout << "Wrong number of parameters "<<" "<<tempVec.size()<<" in file " << fileName << endl;
+       cout << "Should be 28" << endl;
+        exit(1);
+     }
+
      inName.inputDir         = tempVec.at(0);                  // input file names
      inName.controlParamFile = inName.inputDir + tempVec.at(1);
      inName.chipBoundFile    = inName.inputDir + tempVec.at(2);
