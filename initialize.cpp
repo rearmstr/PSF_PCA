@@ -173,7 +173,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
             DESorBCS: =1 DES; =2 BCS
      */
 
-       int iChip,icReadFromHDFS=1,DESorBCS=2;
+       int iChip,icReadFromHDFS=0,DESorBCS=2;
 
        string dirBase,sRunID,sExp,sChip,sFilter,dir,pointing,psf_fileName,fileBase,
               cmdStr,tmpFile;
@@ -192,10 +192,10 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
        if (DESorBCS == 1) {          // read DES
           dirBase+=sRunID+"/";                  // or use dirBase.append(sRunID);
           dir=dirBase+pointing+"/";
-          // if (! FileExists(dir)) {          // disabled after adding the option of HDFS
-          //    cout << "Error: exposure " << pointing << " does not exist!\n";
-          //    exit(1);
-          // }
+          if (! FileExists(dir)) {          // disabled after adding the option of HDFS
+              cout << "Error: exposure " << pointing << " does not exist!\n";
+              exit(1);
+           }
           fileBase=dir + sRunID + "-" + pointing + "-";
        }
        else {                        // read BCS
@@ -217,7 +217,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
 
        for (iChip=0; iChip<nChips; iChip++) {
           // read tempStarChip, tempStarPSF for a chip
-
+	 
           sChip=convertInt(iChip+1);
           if (iChip < 9) { sChip="0"+sChip; }
           if (DESorBCS == 1) {                 // DES
@@ -241,6 +241,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
 
           // std::vector< std::vector<double> > psf;     // replace w/ Xmat later
 
+	  //cout << "Reading from " << inputFile<< endl;
           std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(inputFile,CCfits::Read));
 
           CCfits::ExtHDU& table = pInfile->extension(hduNum);
@@ -363,6 +364,7 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
         nCellTot=contParam.nChips*contParam.mc*contParam.nc;
         contParam.nrows=nCellTot*contParam.nShapelet;           // reset nrows
         cout << "\t nChips = " << contParam.nChips << endl;
+        cout << "\t nShapelet = " << contParam.nShapelet << endl;
         cout << "\t data vector dimension (nrows) is reset to " << contParam.nrows << endl;
 
         cell.resize( contParam.nChips, rowVec3d );

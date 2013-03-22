@@ -4,7 +4,8 @@
 #---------------------------- input ------------------------------------
 #
 # inputDir: input dir (this directory)
-  /astro/u/mzm/research/PSF_PCA/
+#  /astro/u/mzm/research/PSF_PCA/
+/data2/home/rarmst/work/PSF_PCA
 #
 # controlParamFile: control parameter file
   inputParams.par

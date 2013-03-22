@@ -106,7 +106,7 @@ int PCAuseSVD(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName)
   RES.Umat = XcovMat.svd().getU();           // eigen is the row vector
   RES.Svec = XcovMat.svd().getS().diag();
 
-  // cout << "#\t eigen vectors (column) U = " << RES.Umat << endl;
+  //cout << "#\t eigen vectors (column) U = " << RES.Umat << endl;
   // cout << "#\t eigen values S = " << RES.Svec << endl;
 
   ScumN(contParam.nrows-1) = RES.Svec(contParam.nrows-1);   // cummulative noise
@@ -119,11 +119,11 @@ int PCAuseSVD(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName)
   }
 
   RES.eigenCoeffMat = RES.Umat.transpose() * myData.Xmat;   // eigen coefficients
-  // cout << "\t eigen coefficients = " << RES.eigenCoeffMat << endl;
+  //cout << "\t eigen coefficients = " << RES.eigenCoeffMat << endl;
 
   reconstruction(contParam,myData,RES);
-  // cout << "\t reconstruction = "
-  //      << RES.reconXmat.subMatrix(0,contParam.nrows,0,5) << endl;
+  //cout << "\t reconstruction = "
+  //     << RES.reconXmat.subMatrix(0,contParam.nrows,0,5) << endl;
 
   // outputToFile (RES.Umat*RES.Umat.transpose(), "results/UUT");
   if (contParam.icout == 0) { 
