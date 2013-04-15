@@ -163,7 +163,7 @@ int main( int argc, char **argv )
     contParam.nChips    = params.read<int>("nchips",1);
     contParam.mc        = params.read<int>("x_cells");
     contParam.nc        = params.read<int>("y_cells");
-    contParam.nShapelet = params.read<int>("n_shapelet",3);
+    contParam.nShapelet = params.read<int>("n_shapelet");
     // modified with nChips
     contParam.nrows     = contParam.nChips*contParam.mc*contParam.nc*contParam.nShapelet;
     

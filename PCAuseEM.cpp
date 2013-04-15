@@ -40,6 +40,7 @@ int PCAuseEM(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName,
 
   int i,j,iter,i1,j1,icount,indx,missCnt=0;
   double Werr,wiMag;
+  cout<<"Neigen "<<kEigen<<endl;
   DMatrix W(nrows,kEigen,0.0),Wnew(nrows,kEigen),XeigenCoeff(kEigen,ncols),
           tempMat(kEigen,kEigen),tempMat1(kEigen,nrows);
 
@@ -127,7 +128,10 @@ int PCAuseEM(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName,
              int irowMiss=0;
              int irowNonMiss=myData.Nmasked[i];
              for (i1=0; i1<nrows; i1++) {
+	       // BA: this index is due to the fact that dataMask only has one value per cell
+	       // since it is not necesary to to for all shapelet components.
                 indx=i1%(contParam.nrows/contParam.nShapelet);      // for dataMask
+		// BA this should be changed to bool, not 0.5
                 if (myData.dataMask(indx,i) < 0.5) {     // missing; put corresponding row
                                                         // of W at the top part of Wnew
                   Wnew.subMatrix(irowMiss,irowMiss+1,0,kEigen)=W.subMatrix(i1,i1+1,0,kEigen);
@@ -190,7 +194,7 @@ int PCAuseEM(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName,
                                 // dt=tmv::LU, QR, QRP, SV
                Xvec.subMatrix(0,kEigen+myData.Nmasked[i],0,1) = 
                     Yvec / Wexpand.subMatrix(0,nrows,0,kEigen+myData.Nmasked[i]);
-            }
+	    }
 
 
              if (myrank == ROOT) {

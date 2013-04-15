@@ -11,9 +11,12 @@ void readVectorDefocus(int, std::string, DMatrix &, int);   // zTab; read a sing
 
 std::vector< std::vector<double> > readIn2dData(const char* filename);
 
-void outputToFile(DMatrix&, std::string);                  // output a double TMV matrix to file
+void outputToFile(const DMatrix &, std::string);                  // output a double TMV matrix to file
                                                            // write every column to a line
-void outputToFileTMVint(tmv::Matrix<int>&, std::string);   // output an int TMV matrix to file
+void outputToFitsFile(c_ControlParam &,const DMatrix & matrix, 
+		      std::string filename);                  // output a double TMV matrix to file
+                                                           // write every column to a line
+void outputToFileTMVint(tmv::Matrix<int>, std::string);   // output an int TMV matrix to file
 void outputVector(int, DMatrix&, std::string);             // output a vector to file
 void outputVectorAll(DMatrix&, std::string);               // all vectors, each to a file
 void outputIntArr(int,std::vector<int>&,std::string);      // output an int array to file

@@ -167,7 +167,7 @@ void getMat(c_ControlParam &contParam, double& SNAPmaskPct, c_Data &myData,
 void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
                   vector<double> & starX, vector<double> & starY,
                   vector<string> exposureList, int iExp, int nChips,
-                  c_inFileName &inName)
+                  c_inFileName &inName,c_ControlParam &param)
 {   /* read a chip at a time, then use insert to concatenate the vectors
             icReadFromHDFS: =1 data files in hadoop file system; =0 otherwise
             DESorBCS: =1 DES; =2 BCS
@@ -218,7 +218,12 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
        for (iChip=0; iChip<nChips; iChip++) {
           // read tempStarChip, tempStarPSF for a chip
 	 
-          sChip=convertInt(iChip+1);
+	 
+	 if(param.skip61 && iChip==60) 
+	   sChip=convertInt(iChip+2);
+	 else 
+	   sChip=convertInt(iChip+1);
+	 
           if (iChip < 9) { sChip="0"+sChip; }
           if (DESorBCS == 1) {                 // DES
               psf_fileName = fileBase + sChip + "-psf.fits";
@@ -241,7 +246,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
 
           // std::vector< std::vector<double> > psf;     // replace w/ Xmat later
 
-	  //cout << "Reading from " << inputFile<< endl;
+	  cout << "Reading from " << inputFile<< endl;
           std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(inputFile,CCfits::Read));
 
           CCfits::ExtHDU& table = pInfile->extension(hduNum);
@@ -341,8 +346,8 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
         /* +++++++++++++++++++++ Stars in an exposure +++++++++++++++++++ */
         int Nstar;                           // number of stars in one exposure
         int iStartShapelet;                  // starting index of the shapelet coeff (0,1...)
-        if (contParam.readDESorSNAP == 1 ) iStartShapelet=3;    // DES
-        if (contParam.readDESorSNAP == 2 ) iStartShapelet=5;    // SNAP
+        iStartShapelet=3;    // DES
+        //if (contParam.readDESorSNAP == 2 ) iStartShapelet=5;    // SNAP
         vector< vector<int> > grid2D(mc, vector<int>(nc,0));   // temp 2D vector (mc,nc)
         vector< vector< vector<int> > > starCount; // (nChips,mc,nc) star count in a cell
 
@@ -363,6 +368,7 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
         contParam.nChips=chipBound.size();
         nCellTot=contParam.nChips*contParam.mc*contParam.nc;
         contParam.nrows=nCellTot*contParam.nShapelet;           // reset nrows
+
         cout << "\t nChips = " << contParam.nChips << endl;
         cout << "\t nShapelet = " << contParam.nShapelet << endl;
         cout << "\t data vector dimension (nrows) is reset to " << contParam.nrows << endl;
@@ -388,7 +394,7 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
         */
 
         cout << "\t generating cells in chips ...\n";
-
+	
         for (i=0; i<contParam.nChips; i++) {
             // cout << "i = " << i << endl;
             xcmin=chipBound.at(i).at(0);
@@ -401,6 +407,8 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
                     cell.at(i).at(im).at(in).at(1)=ycmin+in*dy;
                     cell.at(i).at(im).at(in).at(2)=xcmin+(im+1)*dx;
                     cell.at(i).at(im).at(in).at(3)=ycmin+(in+1)*dy;
+		    myData.bounds.push_back(Bounds<>(xcmin+im*dx,xcmin+(im+1)*dx,
+		    				     ycmin+in*dy,ycmin+(in+1)*dy));
                 }
             }
         }
@@ -506,7 +514,7 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
            }
            else {                                  // DES
               read_des_exp(starPSF,starChip,starX,starY,exposureList,iExp,contParam.nChips,
-                           inName);
+                           inName,contParam);
               Nstar=starPSF.size();
               // cout << "\t Exp = " << iExp << "\t" << starPSF.size() << "\t" << starChip.size()
               //      << "\t" << starX.size() << "\t" << starY.size() << endl;
@@ -535,7 +543,8 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
                    }
                }
 
-               if (ran01() > 0.01*validateSetPct) {
+               //if (ran01() > 0.01*validateSetPct) {
+	       if (1) {
                   validateFlag.at(istar)=1;                     // 1 means not in the validation set
                   starCount.at(starChip.at(istar)).at(im).at(in) += 1;
 
@@ -547,7 +556,8 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
                      myData.Xmat(irow+iShape*nCellTot,iExp) += starPSF.at(istar).at(iStartShapelet+iShape);
                      // myData.Xmat(irow+nCellTot,iExp) += starPSF.at(istar).at(6); // e2 for SNAP for eg
                   }
-
+		  cout << "star " << istar << " is in cell " <<starChip.at(istar)<<" "<< im <<" "<< in << " "
+                       << starPSF.at(istar).at(3) <<" "<<starPSF.at(istar).at(4) <<endl;
                   // cout << "star " << istar << " is in cell (" << starCell.at(istar).at(0)
                   //      << ", " << starCell.at(istar).at(0) << ")\n";
                }
@@ -603,7 +613,8 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
 
         }          // end of loop over exposures
 
-        outFile.close();
+
+	outFile.close();
 
         checkEmptyCell(contParam,myData);
 
@@ -621,7 +632,7 @@ void readInputParams(c_ControlParam &contParam, double & SNAPmaskPct, double & t
      vector<double> tempDoubleVec;
      double Dbuf;
 
-     int numOfInt=19;
+     int numOfInt=20;
 
      ifs.open(fileName);
 
@@ -678,9 +689,11 @@ void readInputParams(c_ControlParam &contParam, double & SNAPmaskPct, double & t
                            *contParam.nShapelet;    // modified with nChips
      contParam.ncols     = tempVec.at(17);
      contParam.nzTabCol  = tempVec.at(18);
-
+     contParam.skip61    = tempVec.at(19);   // skip CCD 61
+     
      SNAPmaskPct         = tempDoubleVec.at(0);   // non-random SNAP stars; % of masked
      tol                 = tempDoubleVec.at(1);   // EM iteration convergence tolerance
+
 
 }
 

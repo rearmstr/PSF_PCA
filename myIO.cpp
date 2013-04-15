@@ -246,7 +246,7 @@ void outputVectorAll (DMatrix &mat, string nameBase)
 
 
 /* --------------------------------------------------------------------- */
-void outputToFile (DMatrix & mat, string fileName)
+void outputToFile (const DMatrix& mat, string fileName)
 {                                     // write every column to a line
   fstream myfile;                     // output matrix to file
 
@@ -276,6 +276,8 @@ void outputToFile (DMatrix & mat, string fileName)
   }
   else { cout << "Failed to open file " << fileName << endl; }
 }
+
+
 
 
 /* --------------------------------------------------------------------- */
