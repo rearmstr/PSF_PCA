@@ -199,7 +199,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
           fileBase=dir + sRunID + "-" + pointing + "-";
        }
        else {                        // read BCS
-          fileBase=dirBase + pointing + "_";
+          fileBase=dirBase + pointing + "-";
        }
 
        // cout << "\t exposure " << iExp << ": " << dir << endl;
@@ -229,7 +229,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
               psf_fileName = fileBase + sChip + "-psf.fits";
           }
           else {                               // BCS
-              psf_fileName = fileBase + sChip + "_psf.fits";
+              psf_fileName = fileBase + sChip + "-psf.fits";
           }
 
           if (icReadFromHDFS != 1) {    // psf fits files are accessible by NFS or on local disk

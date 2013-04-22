@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cstdlib>  // for rand() and srand()
-#include <math.h>   // for sqrt, log, log10 etc
+#include <cmath>   // for sqrt, log, log10 etc
 
 using namespace std;
 
@@ -38,7 +38,7 @@ double randg(const double sigma)
                  w = x1 * x1 + x2 * x2;
          } while ( w >= 1.0 );
 
-         w = sqrt( (-2.0 * log( w ) ) / w );
+         w = std::sqrt( (-2.0 * std::log( w ) ) / w );
          y1 = x1 * w;
          y2 = x2 * w;
 

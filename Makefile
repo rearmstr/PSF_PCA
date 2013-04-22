@@ -2,7 +2,7 @@
 # GCC = g++
 # CXXFLAGS = -pg -g
 GCC = mpicxx
-CXXFLAGS = -O3 -g
+CXXFLAGS = -O3
 
 # ============ MBPbnl =======================================================
 # INCLUDE = -I/Users/mzm/opt/include -I/usr/local/include/CCfits
@@ -18,10 +18,11 @@ CXXFLAGS = -O3 -g
 # LIBS = -L/astro/u/esheldon/exports/tmv-work/lib -ltmv -ltmv_symband -lblas -lpthread -lCCfits -lcfitsio
 
 # for folio
-INCLUDE = -I /data2/home/rarmst/soft/tmv0.71_icpc/include/ -I/usr/global/CCfits/include -I/usr/global/cfitsio/include
-LIBS = -L/data2/home/rarmst/soft/tmv0.71_icpc/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
+#-I/usr/global/cfitsio/include
+INCLUDE = -I${TMV_DIR}/include -I/global/homes/r/rarmst/soft/include
+LIBS = -L${TMV_DIR}/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
        -lmkl_sequential -lpthread -Wl,-rpath=/usr/global/tmv0.71/lib \
-       -openmp -L/usr/global/CCfits/lib -lCCfits -L/usr/global/CCfits/lib -lcfitsio
+       -openmp -L/global/homes/r/rarmst/soft/lib -lCCfits -lcfitsio
 
 fileName=PSF_PCA
 
@@ -31,18 +32,12 @@ clean:
 	rm $(fileName)
 
 OBJtmv = $(fileName).o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
-PCAuseWiberg.o rmDefocus.o ConfigFile.o
+	PCAuseWiberg.o rmDefocus.o ConfigFile.o
 
 $(fileName).o: $(fileName).cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE)
 $(fileName): $(OBJtmv)
 	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS)
-
-#test_svd.o: test_svd.cc myClass.h
-#	$(GCC) $(CXXFLAGS) -c -o $@ test_svd.cc $(INCLUDE)
-#test_svd: test_svd.o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
-#	PCAuseWiberg.o rmDefocus.o
-#	$(GCC) $(CXXFLAGS) -o test_svd $^ $(LIBS)
 
 NR.o: NR.cpp NR.h
 	$(GCC) $(CXXFLAGS) -c -o $@ NR.cpp
@@ -55,9 +50,6 @@ myIO.o: myIO.cpp myIO.h
 
 PCAcommon.o: PCAcommon.cpp PCAcommon.h
 	$(GCC) $(CXXFLAGS) -c -o $@ PCAcommon.cpp $(INCLUDE)
-
-ConfigFile.o: ConfigFile.cpp ConfigFile.h
-	$(GCC) $(CXXFLAGS) -c -o $@ ConfigFile.cpp $(INCLUDE)
 
 PCAuseSVD.o: PCAuseSVD.cpp PCAuseSVD.h
 	$(GCC) $(CXXFLAGS) -c -o $@ PCAuseSVD.cpp $(INCLUDE)
