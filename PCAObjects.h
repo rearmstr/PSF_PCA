@@ -67,6 +67,7 @@ public:
   void addDet(Detection* _det) {dets.push_back(_det);}
   std::vector<float> getMeanVals();
   std::vector<float> getMedianVals();
+  std::vector<float> getVals(std::string type);
   //tmv::Vector<float> getTMVVals();
 
 private:
@@ -84,8 +85,7 @@ public:
   Chip(int _nvar,int _label,float xmax,float ymax): nvar(_nvar),label(_label),bounds(0,xmax,0,ymax) {}
   void addDet(Detection* det);
   void divide(int _nx,int _ny); // setup the cell sizes
-  std::vector<float> getMeanVals();
-  std::vector<float> getMedianVals();
+  std::vector<float> getVals(std::string type);
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
 
 private:
@@ -121,10 +121,8 @@ public:
   void addChip(int ichip,Chip *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,std::string exposure="");
-  // std::vector<float> getMeanVals();
-//   std::vector<float> getMedianVals();
-  tmv::Vector<float> getMeanVals();
-  tmv::Vector<float> getMedianVals();
+  tmv::Vector<float> getVals(std::string type);
+
 private:
   float xmax_chip;
   float ymax_chip;

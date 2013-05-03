@@ -7,6 +7,43 @@ namespace PCA {
   using std::cout;
   using std::endl;
 
+  static FVector definePXY(int order, float x, float xmin, float xmax)
+  {
+    FVector temp(order+1);
+    double newx = (2.*x-xmin-xmax)/(xmax-xmin);
+    temp[0] = 1.;
+    if(order>0) temp[1] = newx;
+    for(int i=2;i<=order;++i) {
+      temp[i] = ((2.*i-1.)*newx*temp[i-1] - (i-1.)*temp[i-2])/i;
+    }
+    return temp;
+  }
+
+  static void setPRow(int fitorder, Position pos, const Bounds& bounds, DVectorView prow)
+  {
+    Assert(int(prow.size()) == (fitorder+1)*(fitorder+2)/2);
+    FVector px =
+      definePXY(fitorder,pos.getX(),bounds.getXMin(),bounds.getXMax());
+    FVector py =
+      definePXY(fitorder,pos.getY(),bounds.getYMin(),bounds.getYMax());
+    int pq = 0;
+    for(int n=0;n<=fitorder;++n) {
+      for(int p=n,q=n-p;q<=n;--p,++q) {
+        Assert(pq < int(prow.size()));
+        prow(pq) = px[p]*py[q];
+        ++pq;
+      }
+    }
+    Assert(pq == int(prow.size()));
+  }
+
+
+
+
+
+
+
+
   // Return the mean values of all the detections in a cell
   std::vector<float> Cell::getMeanVals()
   {
@@ -46,17 +83,27 @@ namespace PCA {
 
   }
       
-   
+  std::vector<float> Cell::getVals(std::string type)
+  {
+    if(type=="mean") {
+      return getMeanVals();
+    }
+    else if(type=="median") {
+      return getMedianVals();
+    }
+    
+  }
+  
   // Get the mean values of all the cells in a chip
   // The ordering of the variables are 
   // Ce1l 1 var1..varN, Cell2 var1..varN, Cell3...
-  std::vector<float> Chip::getMeanVals()
+  std::vector<float> Chip::getVals(std::string type)
   { 
     std::vector<float> v(nvar*cells.size());
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
       //cout<<"  Get Mean from cell "<<i<<endl;
-      std::vector<float> cv=cells[i].getMeanVals();
+      std::vector<float> cv=cells[i].getVals(type);
       for(int j=0;j<nvar;++j) {
         v[cur_index]=cv[j];
         cur_index++;
@@ -65,24 +112,6 @@ namespace PCA {
     return v;
   }
 
-
-  // Get the mean values of all the cells in a chip
-  // The ordering of the variables are 
-  // Ce1l 1 var1..varN, Cell2 var1..varN, Cell3...
-  std::vector<float> Chip::getMedianVals()
-  { 
-    std::vector<float> v(nvar*cells.size());
-    int cur_index=0;
-    for(int i=0;i<cells.size();++i) {
-      //cout<<"  Get Median from cell "<<i<<endl;
-      std::vector<float> cv=cells[i].getMedianVals();
-      for(int j=0;j<nvar;++j) {
-        v[cur_index]=cv[j];
-        cur_index++;
-      }
-    }
-    return v;
-  }
 
   void Chip::divide(int _nx,int _ny) {
     nx=_nx;
@@ -163,7 +192,7 @@ namespace PCA {
             //cout<<xpos[i]<<" "<<ypos[i]<<" "<<ncoeff<<endl;
             std::valarray<double> coeffs;
             table.column("shapelets").read(coeffs, row); 
-            cout<<" "<<ichip<<" "<<xpos[i]<<" "<<ypos[i]<<" "<<coeffs[shapeStart]<<" "<<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
+            //cout<<" "<<ichip<<" "<<xpos[i]<<" "<<ypos[i]<<" "<<coeffs[shapeStart]<<" "<<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
             for(int j=0;j<nvar;++j) {
               
               det->setVal(j,coeffs[shapeStart+j]);
@@ -190,7 +219,7 @@ namespace PCA {
 
 
 
-  tmv::Vector<float> Exposure::getMeanVals()
+  tmv::Vector<float> Exposure::getVals(std::string type)
   { 
     int nchip_var=ny_chip*nx_chip;
     int nfocal=chips.size()*nchip_var;
@@ -201,7 +230,7 @@ namespace PCA {
     int cur_chip=0;
     for(; iter!=chips.end();++iter,cur_chip++) {
       //cout<<"Get mean from chip: "<<iter->first<<endl;
-      std::vector<float> cv=iter->second->getMeanVals();
+      std::vector<float> cv=iter->second->getVals(type);
       for(int j=0;j<cv.size();++j) {
         // really complicated to match current structure
         // this is probably wrong
@@ -214,31 +243,6 @@ namespace PCA {
     return v;
   }
 
-
-  tmv::Vector<float> Exposure::getMedianVals()
-  { 
-    int nchip_var=ny_chip*nx_chip*nvar;
-    int nfocal=chips.size()*nchip_var;
-    int nfocal_s=chips.size()*ny_chip*nx_chip;
-    tmv::Vector<float> v(nfocal);
-    std::map<int,Chip*>::iterator iter=chips.begin();
-
-    int cur_index=0;
-    int cur_chip=0;// chip counter
-    //cout<<"Focal var: "<<nfocal<<endl;
-    for(; iter!=chips.end();++iter,cur_chip++) {
-      //cout<<"Get median from chip: "<<iter->first<<endl;
-      std::vector<float> cv=iter->second->getMedianVals();
-      for(int j=0;j<cv.size();++j) {
-        //cout<<" Var pos: "<<j<<" "<<nfocal_s*(j%nvar)+cur_chip*ny_chip*nx_chip+j/(nvar)<<endl;
-        v[nfocal_s*(j%nvar)+cur_chip*ny_chip*nx_chip+j/(nvar)]=cv[j];
-
-        //v[cur_index]=cv[j];
-        cur_index++;
-      }
-    }
-    return v;
-  }
 
 
 
