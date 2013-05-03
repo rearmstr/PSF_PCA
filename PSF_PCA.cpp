@@ -138,6 +138,7 @@ int main( int argc, char **argv )
     std::string base_svd= params.read<string>("svd_name","svd");  
     outName.eigenVecSVDfile = outName.outputDir+base_svd+"_vec";
     outName.eigenCoefSVDfile  = outName.outputDir+base_svd+"_coef";
+    outName.singularSVDfile  = outName.outputDir+base_svd+"_singular";
     outName.reconSVDfile= outName.outputDir+base_svd+"_recon";      
     outName.reconErrSVDfile= outName.outputDir+base_svd+"_recon_err";
     outName.reconErrPixSVDfile= outName.outputDir+base_svd+"_pix_err";
