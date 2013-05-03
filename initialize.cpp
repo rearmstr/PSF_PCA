@@ -199,7 +199,8 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
           fileBase=dir + sRunID + "-" + pointing + "-";
        }
        else {                        // read BCS
-          fileBase=dirBase + pointing + "-";
+         //fileBase=dirBase + pointing + "-";
+         fileBase=dirBase + pointing + "/"+pointing+"_";
        }
 
        // cout << "\t exposure " << iExp << ": " << dir << endl;
@@ -229,7 +230,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
               psf_fileName = fileBase + sChip + "-psf.fits";
           }
           else {                               // BCS
-              psf_fileName = fileBase + sChip + "-psf.fits";
+              psf_fileName = fileBase + sChip + "_psf.fits";
           }
 
           if (icReadFromHDFS != 1) {    // psf fits files are accessible by NFS or on local disk
@@ -276,7 +277,7 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
           for (i=0; i<nTabRows; i++) {
              if (psf_flags.at(i) == 0) {          // pass psf flag test
 
-                int row=i+1;
+               int row=i+1;
 
                 tempStarChip.push_back(iChip);           // ichip
                 x.push_back(xtemp.at(i));                // x & y
@@ -285,8 +286,9 @@ void read_des_exp(vector< vector<double> > &starPSF, vector<int> &starChip,
                 nCoeff=(order[i]+1)*(order[i]+2)/2;      // psf values
                 std::valarray<double> coeffs;
                 table.column(psfCol).read(coeffs, row);
-                for (int j=0; j<nCoeff; ++j) tempStarPSF.at(icount).push_back(coeffs[j]);
 
+                for (int j=0; j<nCoeff; ++j) tempStarPSF.at(icount).push_back(coeffs[j]);
+                
                 icount++;
              }
           }
@@ -526,6 +528,13 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
 
            for (istar=0; istar<Nstar; istar++) {   // loop over all stars in an exposure
                                                    // to assign stars to cell
+
+             if( std::fabs(starPSF.at(istar).at(3))>0.1 || std::fabs(starPSF.at(istar).at(4))>0.1 ||
+                 std::fabs(starPSF.at(istar).at(5))>1 
+                 ) continue;
+                 
+
+
              if (starChip.at(istar) != -999 ) {
                for (im=0; im<mc; im++) {           // find the cell id in x direction
                    if (cell.at(starChip.at(istar)).at(im).at(0).at(2) >= starX.at(istar)) {
@@ -549,15 +558,16 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
                   starCount.at(starChip.at(istar)).at(im).at(in) += 1;
 
                   // add PSF values to the cell ... need to generalize
-
+                  
                   irow=starChip.at(istar)*mc*nc + in*mc + im;    // position in data vector
                                 // this ordering should match the cell coordinate output
                   for (iShape=0; iShape<contParam.nShapelet; iShape++) {
+                    
                      myData.Xmat(irow+iShape*nCellTot,iExp) += starPSF.at(istar).at(iStartShapelet+iShape);
                      // myData.Xmat(irow+nCellTot,iExp) += starPSF.at(istar).at(6); // e2 for SNAP for eg
                   }
-		  cout << "star " << istar << " is in cell " <<starChip.at(istar)<<" "<< im <<" "<< in << " "
-                       << starPSF.at(istar).at(3) <<" "<<starPSF.at(istar).at(4) <<endl;
+		  //cout << "star " << istar << " is in cell " <<starChip.at(istar)<<" "<< im <<" "<< in << " "
+                  //   << starPSF.at(istar).at(3) <<" "<<starPSF.at(istar).at(4) <<endl;
                   // cout << "star " << istar << " is in cell (" << starCell.at(istar).at(0)
                   //      << ", " << starCell.at(istar).at(0) << ")\n";
                }
@@ -569,6 +579,7 @@ void getRandStarPSF(c_ControlParam &contParam, c_Data &myData,
                      << " " << starX.at(istar) << " " << starY.at(istar)
                      << " " << starPSF.at(istar).at(iStartShapelet)          // e1
                      << " " << starPSF.at(istar).at(iStartShapelet+1)        // e2
+                     << " " << starPSF.at(istar).at(iStartShapelet+2)        // size
                      << " " << validateFlag.at(istar) << endl;
 
            }        // end of istar loop (assign star to cell)
