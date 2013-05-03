@@ -142,7 +142,7 @@ public:
 
   T area() const
   {return defined ? (xmax-xmin)*(ymax-ymin) : 0.;}
-  typename std::vector<Bounds<T> > divide(uint nx, uint ny) const;
+  typename std::vector<Bounds<T> > divide(int nx, int ny) const;
   void write(ostream& fout) const
   {if (defined) 
     fout << xmin << ' ' << xmax << ' ' << ymin << ' ' << ymax << ' ';
@@ -239,24 +239,26 @@ Bounds<T>::shrinkBorder(T d)
 
 template <class T>
 std::vector< Bounds<T> > 
-Bounds<T>::divide(uint nx,uint ny) const
+Bounds<T>::divide(int nx,int ny) const
 {
-  if (!defined) return std::vector< Bounds<T> >(nx,ny);
-  typename std::vector< Bounds<T> > temp(nx*ny);
-  std::vector<double> x(nx+1);
-  std::vector<double> y(ny+1);
+ //  if (!defined) return std::vector< Bounds<T> >(nx,ny);
+   typename std::vector< Bounds<T> > temp(nx*ny);
+  std::vector<T> x(nx+1);
+  std::vector<T> y(ny+1);
   x[0] = xmin;  x[nx] = xmax;
   y[0] = ymin;  y[ny] = ymax;
-  double xstep = (xmax-xmin)/nx;
-  double ystep = (ymax-ymin)/ny;
+  T xstep = (xmax-xmin)/nx;
+  T ystep = (ymax-ymin)/ny;
 
-  for(uint i=1;i<nx;i++) x[i] = x[0]+i*xstep;
-  for(uint j=1;j<ny;j++) y[j] = y[0]+j*ystep;
+  for(int i=1;i<nx;i++) x[i] = x[0]+i*xstep;
+  for(int j=1;j<ny;j++) y[j] = y[0]+j*ystep;
+
   typename std::vector< Bounds<T> >::iterator ii=temp.begin();
-  for(uint i=0;i<nx;i++) for(uint j=0;j<ny;j++) {
+  for(int i=0;i<nx;i++) for(int j=0;j<ny;j++) {
     *ii = Bounds<T>(x[i],x[i+1],y[j],y[j+1]);
     ++ii;
   }
+
   return temp;
 }
 
