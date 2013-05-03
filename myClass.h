@@ -139,6 +139,7 @@ public:
     eigenValSVDfile,
     eigenVecSVDfile,
     eigenCoefSVDfile,
+    singularSVDfile,
     reconSVDfile,
     reconErrSVDfile,
     reconErrPixSVDfile,
