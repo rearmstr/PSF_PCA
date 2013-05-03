@@ -2,7 +2,7 @@
 # GCC = g++
 # CXXFLAGS = -pg -g
 GCC = mpicxx
-CXXFLAGS = -O3
+CXXFLAGS = -O3 
 
 # ============ MBPbnl =======================================================
 # INCLUDE = -I/Users/mzm/opt/include -I/usr/local/include/CCfits
@@ -24,7 +24,7 @@ LIBS = -L${TMV_DIR}/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
        -lmkl_sequential -lpthread -Wl,-rpath=/usr/global/tmv0.71/lib \
        -openmp -L/global/homes/r/rarmst/soft/lib -lCCfits -lcfitsio
 
-fileName=PSF_PCA
+fileName=test
 
 all: $(fileName)
 clean:
@@ -32,12 +32,12 @@ clean:
 	rm $(fileName)
 
 OBJtmv = $(fileName).o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
-	PCAuseWiberg.o rmDefocus.o ConfigFile.o
+	PCAuseWiberg.o rmDefocus.o ConfigFile.o PCAObjects.o
 
 $(fileName).o: $(fileName).cpp myClass.h
-	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE)
+	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE) 
 $(fileName): $(OBJtmv)
-	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS)
+	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS) -o $(fileName)
 
 NR.o: NR.cpp NR.h
 	$(GCC) $(CXXFLAGS) -c -o $@ NR.cpp
@@ -62,3 +62,5 @@ PCAuseWiberg.o: PCAuseWiberg.cpp PCAuseWiberg.h
 
 rmDefocus.o: rmDefocus.cpp rmDefocus.h
 	$(GCC) $(CXXFLAGS) -c -o $@ rmDefocus.cpp $(INCLUDE)
+PCAObjects.o: PCAObjects.cpp PCAObjects.h
+	$(GCC) $(CXXFLAGS) -c -o $@ PCAObjects.cpp $(INCLUDE)
