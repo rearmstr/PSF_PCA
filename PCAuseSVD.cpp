@@ -191,7 +191,7 @@ int PCAuseSVD(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName)
 
   }
   
-
+  outputToFile (RES.eigenCoeffMat.transpose(), outName.eigenVecSVDfile+"_before");
   RES.eigenCoeffMat=Svec*RES.eigenCoeffMat;
 
 
@@ -244,6 +244,8 @@ int PCAuseSVD(c_ControlParam &contParam, c_Data &myData, c_outFileName &outName)
     outputToFile (RES.eigenCoeffMat.transpose(), outName.eigenVecSVDfile);
     outputToFile (RES.reconXmat.transpose(),outName.reconSVDfile);
     outputToFile (RES.reconErrMat.transpose(),outName.reconErrSVDfile); 
+    outputToFile (RES.Svec,outName.singularSVDfile); 
+    
     
   }
 //   if (contParam.icout == 1) {
