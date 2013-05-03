@@ -278,6 +278,100 @@ void outputToFile (const DMatrix& mat, string fileName)
 }
 
 
+void outputToFile (const DVector& mat, string fileName)
+{                                     // write every column to a line
+  fstream myfile;                     // output matrix to file
+
+  // myfile.open("example.txt", ios::out | ios::app | ios::binary);
+  myfile.open(fileName.c_str(), ios::out | ios::binary);
+       // single or double quote makes difference
+       // single quote for a single character, e.g. 'a', it takes 1 byte;
+       // double quote for a string, e.g. "abc", there is a termination byte
+       // in the end.
+       // 'a' and "a" differs by the termination byte.
+  if (myfile.is_open())
+  {
+    cout << "\t opened file " << fileName << " for output" << endl;
+
+    myfile.width(20);            // format
+    myfile.precision(5);
+    myfile.setf( ios_base::scientific | ios_base::uppercase |
+                 ios::showpos | ios_base::right);
+
+    for (size_t j=0; j < mat.size(); j++) {
+      
+      myfile << mat(j) << "  "; 
+    }
+    
+    myfile.close();
+  }
+  else { cout << "Failed to open file " << fileName << endl; }
+}
+
+
+void outputToFileF (const FMatrix& mat, string fileName)
+{                                     // write every column to a line
+  fstream myfile;                     // output matrix to file
+
+  // myfile.open("example.txt", ios::out | ios::app | ios::binary);
+  myfile.open(fileName.c_str(), ios::out | ios::binary);
+       // single or double quote makes difference
+       // single quote for a single character, e.g. 'a', it takes 1 byte;
+       // double quote for a string, e.g. "abc", there is a termination byte
+       // in the end.
+       // 'a' and "a" differs by the termination byte.
+  if (myfile.is_open())
+  {
+    cout << "\t opened file " << fileName << " for output" << endl;
+
+    myfile.width(20);            // format
+    myfile.precision(5);
+    myfile.setf( ios_base::scientific | ios_base::uppercase |
+                 ios::showpos | ios_base::right);
+
+    for (size_t j=0; j < mat.ncols(); j++)
+      {
+        for (size_t i=0; i < mat.nrows(); i++) { myfile << mat(i,j) << "  "; }
+        myfile << "\n";
+      }
+
+    myfile.close();
+  }
+  else { cout << "Failed to open file " << fileName << endl; }
+}
+
+
+void outputToFileF (const FVector& mat, string fileName)
+{                                     // write every column to a line
+  fstream myfile;                     // output matrix to file
+
+  // myfile.open("example.txt", ios::out | ios::app | ios::binary);
+  myfile.open(fileName.c_str(), ios::out | ios::binary);
+       // single or double quote makes difference
+       // single quote for a single character, e.g. 'a', it takes 1 byte;
+       // double quote for a string, e.g. "abc", there is a termination byte
+       // in the end.
+       // 'a' and "a" differs by the termination byte.
+  if (myfile.is_open())
+  {
+    cout << "\t opened file " << fileName << " for output" << endl;
+
+    myfile.width(20);            // format
+    myfile.precision(5);
+    myfile.setf( ios_base::scientific | ios_base::uppercase |
+                 ios::showpos | ios_base::right);
+
+    for (size_t j=0; j < mat.size(); j++) {
+      
+      myfile << mat(j) << "  "; 
+    }
+    
+    myfile.close();
+  }
+  else { cout << "Failed to open file " << fileName << endl; }
+}
+
+
 
 
 /* --------------------------------------------------------------------- */
