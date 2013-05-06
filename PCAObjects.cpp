@@ -199,11 +199,11 @@ namespace PCA {
 
   Exposure::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
     label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
-    nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3) {}
+    nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3),outlier(0) {}
 
   bool Exposure::readShapelet(std::string dir,int nvar,std::string exp) {
     if (exp.empty()) exp=label;
-    //cout << "Reading exposure " << exp<< endl;
+    cout << "Reading exposure " << exp<< endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
       
       Chip *chip=new Chip(ichip,xmax_chip,ymax_chip);

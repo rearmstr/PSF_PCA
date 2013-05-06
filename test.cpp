@@ -36,6 +36,7 @@ int main(int argc,char*argv[])
   std::string grid_file= params.read<std::string>("grid_file");
   bool subtract_mean=params.read<bool>("subtract_mean",true);
   std::string type=params.read<std::string>("type","mean");
+  float exp_cut= params.read<float>("exp_cut",0.15);
   //bool skip61= params.read<bool>("skip61",true);
 
   cout<<"Settings..."<<endl;
@@ -62,15 +63,15 @@ int main(int argc,char*argv[])
       ogrid<<cb[i].getXMin()<<" "<<cb[i].getYMin()<<" "<<cb[i].getXMax()<<" "<<cb[i].getYMax()<<endl;
     }
   }
-  cout<<"Cell built"<<endl;
+
   int nexp=exps.size();
   nvar*=nx*ny*(ccd-1);
   if(type=="plin") nvar*=3;
   if(type=="pquad") nvar*=6;
 
+  // Build the data matrix
   FMatrix dataM(nexp,nvar);
   for(int i=0;i<nexp;++i) {
-    cout<<"Getting data from exposure "<<i<<endl;
     FVector med=exps[i].getVals(type);
     dataM.row(i)=med;
   }
@@ -102,9 +103,7 @@ int main(int argc,char*argv[])
     V.resize(nvar,nvar);
     Svec.resize(nvar);
     U.resize(nexp,nvar);
-    
     U=dataM;
-
     SV_Decompose(U,Svec,V,true);
 
 
@@ -118,11 +117,82 @@ int main(int argc,char*argv[])
     SV_Decompose(V.transpose(),Svec,U.transpose());
   }
 
+  // Check for outliers at the exposure level
+  // if a single pca contributes more than exp_cut% then remove it and do the fit again
+  int noutlier=0;
+  for(int iexp=0;iexp<U.nrows();++iexp) {
+    
+    int sum=0;
+    for(int ipca=0;ipca<U.nrows();++ipca) {
+      double var=U(iexp,ipca)*U(iexp,ipca);
+      sum+=var;
 
-  outputToFileF (V.transpose(),  outname+"_vec");
-  outputToFileF (U.transpose(), outname+"_coeff");
-  outputToFileF (Svec.diag(), outname+"_singular"); 
+      if(var>exp_cut) {
+        cout<<"Removing Exposure "<<exps[iexp].getLabel()
+            <<" , has PC with fractional variance "<<var<<endl;;
+        exps[iexp].setOutlier(1);
+        noutlier++;
+        break;
+      }
+    }
+  }
+
+  if(noutlier>0) {
+    // Build the data matrix
+    int nexp_cut=nexp-noutlier;
+    std::ofstream oexp((outname+"_exp").c_str());
+    FMatrix dataM(nexp_cut,nvar);
+   
+    int cur_exp=0;
+    for(int i=0;i<nexp;++i) {
+      if(exps[i].isOutlier()) continue;
+      FVector med=exps[i].getVals(type);
+      dataM.row(cur_exp)=med;
+      oexp<<exps[i].getLabel()<<endl;
+      cur_exp++;
+    }
+    outputToFileF (dataM.transpose(), outname+"_data");
   
+    // Remove mean from variables
+    if(subtract_mean) {
+      for(int i=0;i<nvar;++i) {
+        
+        FVector col=dataM.col(i);
+        
+        double sum=0.;
+        for(int j=0;j<nexp_cut;++j) {
+          sum+=dataM(j,i);
+        }
+        for(int j=0;j<nexp_cut;++j) {
+          dataM(j,i)=dataM(j,i)-sum/nexp_cut;
+        }
+        
+      }
+    }
+    
+    if(nexp_cut > nvar) {
+      V.resize(nvar,nvar);
+      Svec.resize(nvar);
+      U.resize(nexp_cut,nvar);
+      U=dataM;
+      SV_Decompose(U,Svec,V,true);
+    }
+    else {
+      
+      V.resize(nexp_cut,nvar);
+      Svec.resize(nexp_cut);
+      U.resize(nexp_cut,nexp_cut);
+      V = dataM;
+      SV_Decompose(V.transpose(),Svec,U.transpose());
+    }
+  }
+    
+    
+    
+    outputToFileF (V.transpose(),  outname+"_vec");
+    outputToFileF (U.transpose(), outname+"_coeff");
+    outputToFileF (Svec.diag(), outname+"_singular"); 
+    
 
   //cout<<med<<endl;
 
