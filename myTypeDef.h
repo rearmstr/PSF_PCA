@@ -10,5 +10,7 @@ typedef tmv::DiagMatrix<float> FDiagMatrix;
 typedef tmv::Matrix<double,tmv::RowMajor> DMatrixRowM;
 typedef tmv::Vector<double> DVector;
 typedef tmv::Vector<float> FVector;
+typedef tmv::VectorView<double> DVectorView;
+typedef tmv::VectorView<float> FVectorView;
 
 #endif

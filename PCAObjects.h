@@ -67,11 +67,14 @@ public:
   void addDet(Detection* _det) {dets.push_back(_det);}
   std::vector<float> getMeanVals();
   std::vector<float> getMedianVals();
+  std::vector<float> getFitVals(int order=1);
   std::vector<float> getVals(std::string type);
+  int getNVal(std::string type);
   //tmv::Vector<float> getTMVVals();
 
 private:
   int nvar;
+  int fitorder;
   Bounds<float> bounds;
   std::vector<Detection*> dets;
 };
@@ -82,18 +85,20 @@ class Chip {
 
 public:
   // assume chip starts at zero
-  Chip(int _nvar,int _label,float xmax,float ymax): nvar(_nvar),label(_label),bounds(0,xmax,0,ymax) {}
+  Chip(int _label,float xmax,float ymax): label(_label),bounds(0,xmax,0,ymax) {}
   void addDet(Detection* det);
-  void divide(int _nx,int _ny); // setup the cell sizes
+  void divide(int nvar, int _nx,int _ny); // setup the cell sizes
   std::vector<float> getVals(std::string type);
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
+  Cell* getCell(int i) {return cells[i];}
+  Cell* operator[](int i) {return cells[i];}
 
 private:
-  int nvar;
   int label;
+  int nvar;
   Bounds<float> bounds;
   std::vector<Bounds<float> > cbounds;
-  std::vector<Cell> cells;
+  std::vector<Cell*> cells;
   int nx;
   int ny;
   
@@ -103,7 +108,7 @@ private:
 class Exposure {
 
 public:
-  Exposure(std::string _label,int _nchip, int nvar,double ra=-9999.0,double dec=-9999.0,float airmass=-9999.0);
+  Exposure(std::string _label,int _nchip, double ra=-9999.0,double dec=-9999.0,float airmass=-9999.0);
   
   void setChipDivide(int nx,int ny) {
     ny_chip=ny;
@@ -115,12 +120,13 @@ public:
   }
   
   Chip* operator[](int i) {return chips[i];}
+  Chip* getChip(int i) {return chips[i];}
   
   void setShapeStart(int start) {shapeStart=start;}
   void addSkip(int ichip) { skip.push_back(ichip);}
   void addChip(int ichip,Chip *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
-  bool readShapelet(std::string dir,std::string exposure="");
+  bool readShapelet(std::string dir,int nvar,std::string exposure="");
   tmv::Vector<float> getVals(std::string type);
 
 private:

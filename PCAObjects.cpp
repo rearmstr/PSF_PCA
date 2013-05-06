@@ -2,6 +2,7 @@
 #include <CCfits/CCfits>
 #include "TMV.h"
 #include <sstream>
+#include "myTypeDef.h"
 namespace PCA {
 
   using std::cout;
@@ -19,26 +20,23 @@ namespace PCA {
     return temp;
   }
 
-  static void setPRow(int fitorder, Position pos, const Bounds& bounds, DVectorView prow)
+  static void setPRow(int fitorder, Position<float> pos, const Bounds<float>& bounds, FVectorView prow)
   {
-    Assert(int(prow.size()) == (fitorder+1)*(fitorder+2)/2);
+    //Assert(int(prow.size()) == (fitorder+1)*(fitorder+2)/2);
     FVector px =
-      definePXY(fitorder,pos.getX(),bounds.getXMin(),bounds.getXMax());
+      definePXY(fitorder,pos.x,bounds.getXMin(),bounds.getXMax());
     FVector py =
-      definePXY(fitorder,pos.getY(),bounds.getYMin(),bounds.getYMax());
+      definePXY(fitorder,pos.y,bounds.getYMin(),bounds.getYMax());
     int pq = 0;
     for(int n=0;n<=fitorder;++n) {
       for(int p=n,q=n-p;q<=n;--p,++q) {
-        Assert(pq < int(prow.size()));
+        //Assert(pq < int(prow.size()));
         prow(pq) = px[p]*py[q];
         ++pq;
       }
     }
-    Assert(pq == int(prow.size()));
+    //Assert(pq == int(prow.size()));
   }
-
-
-
 
 
 
@@ -82,6 +80,40 @@ namespace PCA {
     return v;
 
   }
+
+  // Return the median values of all the detections in a cell
+  std::vector<float> Cell::getFitVals(int order)
+  {
+    fitorder=order;
+    int nfit=(fitorder+1)*(fitorder+2)/2;
+    std::vector<float> v(nvar*nfit);
+    FMatrix b(dets.size(),nvar);
+    FMatrix A(dets.size(),nfit);
+
+    for(int j=0;j<nvar;++j) {
+      std::vector<float> tmp(dets.size());      
+      for(int i=0;i<dets.size();++i) {
+        b(i,j)=dets[i]->getVal(j);
+      }
+    }
+    
+    for(int n=0;n<dets.size();++n) {
+      setPRow(fitorder,dets[n]->getPos(),bounds,A.row(n));
+    }
+
+    FMatrix x=b/A;
+    int cur=0;
+    for(int i=0;i<x.nrows();++i) {
+      for(int j=0;j<x.ncols();++j) {
+        v[cur]=x(i,j);
+        cur++;
+      }
+    }
+
+
+    return v;
+
+  }
       
   std::vector<float> Cell::getVals(std::string type)
   {
@@ -91,20 +123,48 @@ namespace PCA {
     else if(type=="median") {
       return getMedianVals();
     }
+    else if(type=="plin") {
+      return getFitVals(1);
+    }
+    else if(type=="pquad") {
+      return getFitVals(2);
+    }
     
   }
+
+  int Cell::getNVal(std::string type)
+  {
   
+    if(type=="mean") {
+      return nvar;
+    }
+    else if(type=="median") {
+      return nvar;
+    }
+    else if(type=="plin") {
+      // need to check that this is consistent
+      return nvar*3;//(fitorder+1)*(fitorder+2)/2;
+    }
+    else if(type=="pquad") {
+      // need to check that this is consistent
+      return nvar*6;//(fitorder+1)*(fitorder+2)/2;
+    }
+  }
+
   // Get the mean values of all the cells in a chip
   // The ordering of the variables are 
   // Ce1l 1 var1..varN, Cell2 var1..varN, Cell3...
   std::vector<float> Chip::getVals(std::string type)
   { 
-    std::vector<float> v(nvar*cells.size());
+
+    // assume all cells have the same number
+    int ntotvar=cells[0]->getNVal(type);
+    std::vector<float> v(ntotvar*cells.size());
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
-      //cout<<"  Get Mean from cell "<<i<<endl;
-      std::vector<float> cv=cells[i].getVals(type);
-      for(int j=0;j<nvar;++j) {
+      //cout<<"  Get vals from cell "<<i<<endl;
+      std::vector<float> cv=cells[i]->getVals(type);
+      for(int j=0;j<ntotvar;++j) {
         v[cur_index]=cv[j];
         cur_index++;
       }
@@ -112,13 +172,13 @@ namespace PCA {
     return v;
   }
 
-
-  void Chip::divide(int _nx,int _ny) {
+  
+  void Chip::divide(int nvar,int _nx,int _ny) {
     nx=_nx;
     ny=_ny;
     std::vector<Bounds<float> > vb=bounds.divide(nx,ny);
     for(int i=0;i<vb.size();++i) {
-      Cell cell(nvar,vb[i]);
+      Cell *cell=new Cell(nvar,vb[i]);
       cells.push_back(cell);
       cbounds.push_back(vb[i]);
     }
@@ -132,22 +192,22 @@ namespace PCA {
     int bin_y=static_cast<int>(det->getPos().y/(bounds.getYMax()/ny));
     int bin=bin_x*ny+bin_y;
 
-    cells[bin].addDet(det);
+    cells[bin]->addDet(det);
   }
 
 
 
-  Exposure::Exposure (string _label,int _nchip, int _nvar, double _ra,double _dec,float _airmass):
-    label(_label),nchip(_nchip),nvar(_nvar),ra(_ra),dec(_dec),airmass(_airmass),
+  Exposure::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
+    label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
     nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3) {}
 
-  bool Exposure::readShapelet(std::string dir,std::string exp) {
+  bool Exposure::readShapelet(std::string dir,int nvar,std::string exp) {
     if (exp.empty()) exp=label;
-    cout << "Reading exposure " << exp<< endl;
+    //cout << "Reading exposure " << exp<< endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
       
-      Chip *chip=new Chip(nvar,ichip,xmax_chip,ymax_chip);
-      chip->divide(nx_chip,ny_chip);
+      Chip *chip=new Chip(ichip,xmax_chip,ymax_chip);
+      chip->divide(nvar,nx_chip,ny_chip);
 
       // check if this chip should be skipped
       std::vector<int>::iterator iter=find(skip.begin(),skip.end(),ichip);
@@ -223,22 +283,32 @@ namespace PCA {
   { 
     int nchip_var=ny_chip*nx_chip;
     int nfocal=chips.size()*nchip_var;
-    tmv::Vector<float> v(nvar*nfocal);
-    std::map<int,Chip*>::iterator iter=chips.begin();
 
+    std::map<int,Chip*>::const_iterator iter=chips.begin();
+
+    int ntotvar=iter->second->getCell(0)->getNVal(type);
+    //cout<<"Total vars: "<<ntotvar*nfocal<<" chips: "<<chips.size()<<endl;
+    tmv::Vector<float> v(ntotvar*nfocal,0.0);
     int cur_index=0;
     int cur_chip=0;
+    
     for(; iter!=chips.end();++iter,cur_chip++) {
-      //cout<<"Get mean from chip: "<<iter->first<<endl;
+      //cout<<"Get vals from chip: "<<iter->first<<endl;
       std::vector<float> cv=iter->second->getVals(type);
+      //cout<<"Got "<<cv.size()<<endl;
       for(int j=0;j<cv.size();++j) {
+        
         // really complicated to match current structure
         // this is probably wrong
-        v[nfocal*(j%nvar)+cur_chip*nchip_var+j/(nvar)]=cv[j];
+        //cout<<"  "<<j<<" "<<nfocal*(j%ntotvar)+cur_chip*nchip_var+j/(ntotvar)<<endl;
+        v[nfocal*(j%ntotvar)+cur_chip*nchip_var+j/(ntotvar)]=cv[j];
 
+        // I want to switch to this once I am willing to change all my 
+        // plotting routines
         //v[cur_index]=cv[j];
         cur_index++;
       }
+
     }
     return v;
   }
