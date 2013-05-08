@@ -201,7 +201,7 @@ namespace PCA {
     label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
     nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3),outlier(0) {}
 
-  bool Exposure::readShapelet(std::string dir,int nvar,std::string exp) {
+  bool Exposure::readShapelet(std::string dir,int nvar,bool use_dash,std::string exp) {
     if (exp.empty()) exp=label;
     cout << "Reading exposure " << exp<< endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
@@ -214,10 +214,20 @@ namespace PCA {
       if(iter!=skip.end()) continue;
       
       std::stringstream inputFile;
-      inputFile << dir << "/" << exp << "_";
+      if(!use_dash) {
+        inputFile << dir << "/" << exp << "_";
+      }
+      else {
+        inputFile << dir << "/" << exp << "-";
+      }
       if(ichip<10) inputFile <<0;
       
-      inputFile << ichip << "_psf.fits";
+      if(!use_dash) {
+        inputFile << ichip << "_psf.fits";
+      }
+      else {
+        inputFile << ichip << "-psf.fits";
+      }
 
 
       try {
@@ -264,7 +274,7 @@ namespace PCA {
         
       }
       catch (CCfits::FitsException& ) {
-        cout<<"Can't open chip: "<<ichip<<" from exposure "<<exp<<" skipping"<<endl;
+        cout<<"Can't open chip: "<<inputFile.str()<<" from exposure "<<exp<<" skipping"<<endl;
         return false;
       }
       

@@ -126,7 +126,7 @@ public:
   void addSkip(int ichip) { skip.push_back(ichip);}
   void addChip(int ichip,Chip *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
-  bool readShapelet(std::string dir,int nvar,std::string exposure="");
+  bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
   tmv::Vector<float> getVals(std::string type);
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}
