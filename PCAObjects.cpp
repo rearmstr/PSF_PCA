@@ -41,12 +41,20 @@ namespace PCA {
 
 
 
-
+  int Cell::getNDet() {
+    int ngood=0;
+    for(int i=0;i<dets.size();++i) {
+      if(!dets[i]->isClipped()) ngood++;
+    }
+  }
   // Return the mean values of all the detections in a cell
+  // if no detections found it will return a zero
   std::vector<float> Cell::getMeanVals()
   {
-    std::vector<float> v(nvar,0.0);
+    std::vector<float> v(nvar,defaultVal);
     if(dets.size()==0) return v;
+        
+    for(int j=0;j<nvar;++j) v[j]=0;
 
     for(int i=0;i<dets.size();++i) {
       for(int j=0;j<nvar;++j) {
@@ -57,8 +65,8 @@ namespace PCA {
 
     for(int j=0;j<nvar;++j) {
       v[j]/=dets.size();
-      //cout<<"    Cell var "<<j<<" "<<v[j]<<endl;
     }
+
     return v;
 
   }
@@ -66,7 +74,9 @@ namespace PCA {
   // Return the median values of all the detections in a cell
   std::vector<float> Cell::getMedianVals()
   {
-    std::vector<float> v(nvar);
+    std::vector<float> v(nvar,defaultVal);
+    if(dets.size()==0) return v;
+    for(int j=0;j<nvar;++j) v[j]=0;
 
     for(int j=0;j<nvar;++j) {
       std::vector<float> tmp(dets.size());      
@@ -76,17 +86,64 @@ namespace PCA {
       v[j]=median<float>(tmp);
       //cout<<"    Cell var "<<j<<" "<<v[j]<<endl;
     }
-    
+
     return v;
 
   }
+
+  // Return the median values of all the detections in a cell
+  std::vector<float> Cell::getMeanClipVals(float clip)
+  {
+    std::vector<float> v(nvar,defaultVal);
+    if(dets.size()==0) return v;
+    for(int j=0;j<nvar;++j) v[j]=0;
+    //cout<<"Cell "<<endl;
+    //iterate once through the variables to label outliers using the
+    //the median absolute deviation
+    for(int j=0;j<nvar;++j) {
+      std::vector<float> tmp(dets.size());      
+      for(int i=0;i<dets.size();++i) {
+        tmp[i]=dets[i]->getVal(j);
+      }
+      double mad;
+      double median=median_mad(tmp,mad);
+      //cout<<nvar<<" "<<median<<" "<<mad<<endl;
+      for(int i=0;i<dets.size();++i) {
+        if( std::abs(tmp[i]-median) > clip*mad) {
+          dets[i]->setClip(true);
+          //cout<<"Clip "<<i<<" "<< std::abs(tmp[i]-median)<<" "<<clip*mad<<endl;
+        }
+      }
+      
+    }
+
+    int ngood=0;
+    // Loop through ignoring clipped guys and calculate mean
+    for(int i=0;i<dets.size();++i) {
+      if(dets[i]->isClipped()) continue;
+      ngood++;
+      for(int j=0;j<nvar;++j) {
+        v[j]+=dets[i]->getVal(j);
+      }
+    }
+    
+    for(int j=0;j<nvar;++j) {
+      v[j]/=ngood;
+    }
+
+    return v;
+
+  }
+
+
 
   // Return the median values of all the detections in a cell
   std::vector<float> Cell::getFitVals(int order)
   {
     fitorder=order;
     int nfit=(fitorder+1)*(fitorder+2)/2;
-    std::vector<float> v(nvar*nfit);
+    std::vector<float> v(nvar*nfit,defaultVal);
+    if(dets.size()==0) return v;
     FMatrix b(dets.size(),nvar);
     FMatrix A(dets.size(),nfit);
 
@@ -120,6 +177,12 @@ namespace PCA {
     if(type=="mean") {
       return getMeanVals();
     }
+    else if(type=="mean_clip3") {
+      return getMeanClipVals(3);
+    }
+    else if(type=="mean_clip4") {
+      return getMeanClipVals(4);
+    }
     else if(type=="median") {
       return getMedianVals();
     }
@@ -136,6 +199,12 @@ namespace PCA {
   {
   
     if(type=="mean") {
+      return nvar;
+    }
+    if(type=="mean_clip3") {
+      return nvar;
+    }
+    if(type=="mean_clip4") {
       return nvar;
     }
     else if(type=="median") {
@@ -172,6 +241,15 @@ namespace PCA {
     return v;
   }
 
+  std::vector<bool> Chip::getMissing()
+  {
+    std::vector<bool> v(cells.size(),false);
+    int cur_index=0;
+    for(int i=0;i<cells.size();++i) {
+      if(cells[i]->getNDet()==0) v[i]=true;
+    }
+    return v;
+  }
   
   void Chip::divide(int nvar,int _nx,int _ny) {
     nx=_nx;
@@ -286,8 +364,22 @@ namespace PCA {
   }
   
 
+  std::vector<bool> Exposure::getMissing()
+  {
+    int nchip_var=ny_chip*nx_chip;
+    int ncell=chips.size()*ny_chip*nx_chip;
+    std::vector<bool> v(ncell,false);
+    std::map<int,Chip*>::const_iterator iter=chips.begin();
 
-
+    int cur_index=0;    
+    for(; iter!=chips.end();++iter) {
+      
+      std::vector<bool> cv=iter->second->getMissing();
+      for(int j=0;j<cv.size();++j) v[cur_index]=cv[j];
+    }
+    
+    return v;
+  }
 
   tmv::Vector<float> Exposure::getVals(std::string type)
   { 

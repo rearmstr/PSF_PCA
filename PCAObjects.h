@@ -23,15 +23,23 @@ namespace PCA {
   template <class T>
   T median(std::vector<T>& v) {return percentile(v,0.5);}
 
+  template <class T>
+  double median_mad(T& v,double &mad) {
+    double med=median(v);
+    T medr(v.size());
+    for(int i=0;i<v.size();++i) medr[i]=std::abs(v[i]-med);
+    mad=1.4826*median(medr);
+    return med;
+  }
+  
 
-
-
+  static const float defaultVal  = -9999.0;
 
 class Detection {
 
  public:
 
-  Detection(float x,float y,int nobs) :pos(x,y),vals(nobs,-9999.0),nval(nobs) {}
+  Detection(float x,float y,int nobs) :pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
   
   Position<float> getPos() {return pos;}
   std::vector<float> getVals() {return vals;}
@@ -46,13 +54,14 @@ class Detection {
   void setVals(std::vector<float> &_vals) {
     vals=_vals;
    }
-
+  void setClip(bool val) {clip=val;}
+  bool isClipped() {return clip;}
   
 protected:
   int nval;
   Position<float> pos;
   std::vector<float> vals;
-
+  bool clip;
 };
 
 // Cell contains potentially many detections, the ares is rectangular (for now)
@@ -60,12 +69,15 @@ protected:
 // done in this class
 class Cell {
 
+
 public:
 
   Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax) {}
   Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
   void addDet(Detection* _det) {dets.push_back(_det);}
+  int getNDet();
   std::vector<float> getMeanVals();
+  std::vector<float> getMeanClipVals(float clip);
   std::vector<float> getMedianVals();
   std::vector<float> getFitVals(int order=1);
   std::vector<float> getVals(std::string type);
@@ -77,6 +89,7 @@ private:
   int fitorder;
   Bounds<float> bounds;
   std::vector<Detection*> dets;
+
 };
 
 
@@ -84,11 +97,12 @@ private:
 class Chip {
 
 public:
-  // assume chip starts at zero
+  // assume chip starts at zero,zero
   Chip(int _label,float xmax,float ymax): label(_label),bounds(0,xmax,0,ymax) {}
   void addDet(Detection* det);
   void divide(int nvar, int _nx,int _ny); // setup the cell sizes
   std::vector<float> getVals(std::string type);
+  std::vector<bool> getMissing();
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
   Cell* getCell(int i) {return cells[i];}
   Cell* operator[](int i) {return cells[i];}
@@ -128,6 +142,7 @@ public:
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
   tmv::Vector<float> getVals(std::string type);
+  std::vector<bool> getMissing();
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}
   void setOutlier(bool val) {outlier=val;}
