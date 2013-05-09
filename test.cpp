@@ -9,6 +9,65 @@ using namespace PCA;
 std::ostream* dbgout = 0;
 bool XDEBUG = false;
 
+
+void doSVD(FMatrix &data,int nvar,int nexp,FMatrix &U,
+           FDiagMatrix &Svec,FMatrix &Vt)
+{
+  if(nexp > nvar) {
+    Vt.resize(nvar,nvar);
+    Svec.resize(nvar);
+    U.resize(nexp,nvar);
+    U=data;
+    SV_Decompose(U,Svec,Vt,true);
+
+  }
+  else {
+
+    Vt.resize(nexp,nvar);
+    Svec.resize(nexp);
+    U.resize(nexp,nexp);
+    Vt = data;
+    SV_Decompose(Vt.transpose(),Svec,U.transpose());
+  }
+}
+
+int identifyOutliers(FMatrix &m,vector<bool> &outliers,float cut)
+{
+  int noutlier=0;
+  outliers.resize(m.nrows());
+  for(int iexp=0;iexp<m.nrows();++iexp) {
+    
+    int sum=0;
+    outliers[iexp]=false;
+    for(int ipca=0;ipca<m.ncols();++ipca) {
+      double var=m(iexp,ipca)*m(iexp,ipca);
+      sum+=var;
+
+      if(var>cut)  {
+        cout<<" Found outlier with % contribution: "<<var<<endl;
+        outliers[iexp]=true;
+        noutlier++;
+        break;
+      }
+    }
+  }
+  return noutlier;
+}
+
+
+void meanRemove(FMatrix &m)
+{
+  for(int i=0;i<m.ncols();++i) {
+
+    FVectorView col=m.col(i);
+    double sum=m.col(i).sumElements();
+    col.addToAll(-sum/m.nrows());
+  }
+}
+
+
+
+
 int main(int argc,char*argv[])
 {
 
@@ -39,6 +98,8 @@ int main(int argc,char*argv[])
   float exp_cut= params.read<float>("exp_cut",0.15);
   bool use_dash=params.read<bool>("use_dash",false);
   std::string prefix=params.read<std::string>("prefix","");
+  int max_outlier_iter=params.read<int>("max_outlier_iter",100);
+  bool do_exp_rej=params.read<bool>("do_exp_rej",true);
   //bool skip61= params.read<bool>("skip61",true);
 
   cout<<"Settings..."<<endl;
@@ -62,7 +123,7 @@ int main(int argc,char*argv[])
   std::ofstream ogrid(grid_file.c_str());
   
   int nccd=ccd;
-  if(skip61) nccd-=1;
+  if(skip61 && ccd>61) nccd-=1;
   for(int j=0;j<nccd;++j) {
     for(int i=0;i<cb.size();++i) {
       ogrid<<cb[i].getXMin()<<" "<<cb[i].getYMin()<<" "<<cb[i].getXMax()<<" "<<cb[i].getYMax()<<endl;
@@ -88,116 +149,71 @@ int main(int argc,char*argv[])
   
   // Remove mean from the data
   // probably can bemore efficient by using tmv operations
-  if(subtract_mean) {
-    for(int i=0;i<nvar;++i) {
-      
-      FVector col=dataM.col(i);
-      
-      double sum=0.;
-      for(int j=0;j<nexp;++j) {
-        sum+=dataM(j,i);
-      }
-      for(int j=0;j<nexp;++j) {
-        dataM(j,i)=dataM(j,i)-sum/nexp;
-      }
-      
-    }
-  }
+  if(subtract_mean) meanRemove(dataM);
 
   
   // matrices for svd
   FDiagMatrix Svec(1);
   FMatrix U(1,1),Vt(1,1);
-  
-  if(nexp > nvar) {
-    Vt.resize(nvar,nvar);
-    Svec.resize(nvar);
-    U.resize(nexp,nvar);
-    U=dataM;
-    SV_Decompose(U,Svec,Vt,true);
+  doSVD(dataM,nvar,nexp,U,Svec,Vt);
 
+  if(do_exp_rej) {
+    // Check for outliers at the exposure level
+    // if a single pca contributes more than exp_cut to the total
+    // remove it and do the fit again
+    int noutlier=0;
+    int outlier_iter=0;
+    do {
+      cout<<"\nOutlier rejection iter "<<outlier_iter<<endl;
+      //cout<<"Exposures remaining: "<<U.nrows()<<endl;
+      vector<bool> outliers;
+      noutlier=identifyOutliers(U,outliers,exp_cut);
+      int nexp_cur=U.nrows();
+      int iexp=0;
+      cout<<"Found "<<noutlier<<" outliers"<<endl;
 
-  }
-  else {
-
-    Vt.resize(nexp,nvar);
-    Svec.resize(nexp);
-    U.resize(nexp,nexp);
-    Vt = dataM;
-    SV_Decompose(Vt.transpose(),Svec,U.transpose());
-  }
-
-  // Check for outliers at the exposure level
-  // if a single pca contributes more than exp_cut% then remove it and do the fit again
-  // maybe we want to iterate this
-  int noutlier=0;
-  for(int iexp=0;iexp<U.nrows();++iexp) {
-    
-    int sum=0;
-    for(int ipca=0;ipca<U.nrows();++ipca) {
-      double var=U(iexp,ipca)*U(iexp,ipca);
-      sum+=var;
-
-      if(var>exp_cut) {
-        cout<<"Removing Exposure "<<exps[iexp].getLabel()
-            <<" , has PC with fractional variance "<<var<<endl;;
-        exps[iexp].setOutlier(1);
-        noutlier++;
-        break;
-      }
-    }
-  }
-
-  if(noutlier>0) {
-    // go throuth the process again
-    int nexp_cut=nexp-noutlier;
-    std::ofstream oexp((outname+"_exp").c_str());
-    FMatrix dataM(nexp_cut,nvar);
-   
-    int cur_exp=0;
-    for(int i=0;i<nexp;++i) {
-      if(exps[i].isOutlier()) continue;
-      FVector med=exps[i].getVals(type);
-      dataM.row(cur_exp)=med;
-      oexp<<exps[i].getLabel()<<endl;
-      cur_exp++;
-    }
-    outputToFileF (dataM.transpose(), outname+"_data");
-  
-    // Remove mean from variables
-    if(subtract_mean) {
-      for(int i=0;i<nvar;++i) {
+      for(int i=0;i<nexp;++i) {
+        if(exps[i].isOutlier()) continue;
         
-        FVector col=dataM.col(i);
-        
-        double sum=0.;
-        for(int j=0;j<nexp_cut;++j) {
-          sum+=dataM(j,i);
+        if(outliers[iexp]) {
+          cout<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
+          exps[i].setOutlier(1);
         }
-        for(int j=0;j<nexp_cut;++j) {
-          dataM(j,i)=dataM(j,i)-sum/nexp_cut;
-        }
-        
+        iexp++;
       }
-    }
-    
-    if(nexp_cut > nvar) {
-      Vt.resize(nvar,nvar);
-      Svec.resize(nvar);
-      U.resize(nexp_cut,nvar);
-      U=dataM;
-      SV_Decompose(U,Svec,Vt,true);
-    }
-    else {
+      //cout<<"Found "<<iexp<<" that were not rejected "<<endl;
+      if(noutlier>0) {
+      int nexp_cut=nexp_cur-noutlier;
+      //cout<<"Reducing size to "<<nexp_cut<<endl;
+      dataM.setZero();
+      dataM.resize(nexp_cut,nvar);
       
-      Vt.resize(nexp_cut,nvar);
-      Svec.resize(nexp_cut);
-      U.resize(nexp_cut,nexp_cut);
-      Vt = dataM;
-      SV_Decompose(Vt.transpose(),Svec,U.transpose());
-    }
+      int cur_exp=0;
+      for(int i=0;i<nexp;++i) {
+        if(exps[i].isOutlier()) continue;
+
+        FVector med=exps[i].getVals(type);
+        dataM.row(cur_exp)=med;
+        cur_exp++;
+      }
+
+      // do I really want to write/overwrite at each stage of the rejection
+      // iteration?  Other option is to keep dataM and not modify it
+      outputToFileF (dataM.transpose(), outname+"_data");
+      
+      // Remove mean from variables
+      if(subtract_mean) meanRemove(dataM);
+      doSVD(dataM,nvar,nexp_cut,U,Svec,Vt);    
+      }
+      outlier_iter++;
+    } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
   }
-    
+
+  std::ofstream oexp((outname+"_exp").c_str());           
+  for(int i=0;i<nexp;++i) {
+    if(exps[i].isOutlier()) continue;
+    oexp<<exps[i].getLabel()<<endl;
+  }
     
     
   outputToFileF (Vt.transpose(),  outname+"_vec");
