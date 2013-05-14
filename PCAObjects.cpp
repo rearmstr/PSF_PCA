@@ -4,6 +4,7 @@
 #include <sstream>
 #include "myTypeDef.h"
 #include <cassert>
+#include "Log.h"
 namespace PCA {
 
   using std::cout;
@@ -97,7 +98,7 @@ namespace PCA {
         tmp[i]=dets[i]->getVal(j);
       }
       v[j]=median<T>(tmp);
-      //cout<<"    Cell var "<<j<<" "<<v[j]<<endl;
+      FILE_LOG(logDEBUG2)<<"Median Cell var "<<j<<" "<<v[j]<<endl;
     }
 
     return v;
@@ -111,26 +112,28 @@ namespace PCA {
     std::vector<T> v(nvar,defaultVal);
     if(dets.size()==0) return v;
     for(int j=0;j<nvar;++j) v[j]=0;
-    //cout<<"Cell "<<endl;
-    //iterate once through the variables to label outliers using the
-    //the median absolute deviation
+    //iterate once through the variables to label outliers in any of the variables 
+    // using the the median absolute deviation
+    int nclip=0;
     for(int j=0;j<nvar;++j) {
+      FILE_LOG(logDEBUG1)<<"Getting variable: "<<j<<endl;
       std::vector<T> tmp(dets.size());      
       for(int i=0;i<dets.size();++i) {
         tmp[i]=dets[i]->getVal(j);
       }
       double mad;
       double median=median_mad(tmp,mad);
-      //cout<<nvar<<" "<<median<<" "<<mad<<endl;
+      FILE_LOG(logDEBUG1)<<"Found "<<tmp.size()<<" objects with median: "<<median<<" mad: "<<mad<<endl;
+
       for(int i=0;i<dets.size();++i) {
         if( std::abs(tmp[i]-median) > clip*mad) {
           dets[i]->setClip(true);
-          //cout<<"Clip "<<i<<" "<< std::abs(tmp[i]-median)<<" "<<clip*mad<<endl;
+          FILE_LOG(logDEBUG2)<<"Clipping object "<<i<<" diff from median: "<< std::abs(tmp[i]-median)<<" max allowed:"<<clip*mad<<endl;
+          nclip++;
         }
       }
-      
     }
-
+    FILE_LOG(logDEBUG1)<<"Clipped "<<nclip<<" detections"<<endl;
     int ngood=0;
     // Loop through ignoring clipped guys and calculate mean
     for(int i=0;i<dets.size();++i) {
@@ -265,7 +268,7 @@ namespace PCA {
     std::vector<T> v(ntotvar*cells.size());
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
-      //cout<<"  Get vals from cell "<<i<<endl;
+      FILE_LOG(logDEBUG)<<"  Get vals from cell "<<i<<endl;
       std::vector<T> cv=cells[i]->getVals(type,params);
       for(int j=0;j<ntotvar;++j) {
         v[cur_index]=cv[j];
@@ -352,7 +355,7 @@ namespace PCA {
   template<class T>
   bool Exposure<T>::readShapelet(std::string dir,int nvar,bool use_dash,std::string exp) {
     if (exp.empty()) exp=label;
-    cout << "Reading exposure " << exp<< endl;
+    FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
       
       Chip<T> *chip=new Chip<T>(ichip,xmax_chip,ymax_chip);
@@ -408,10 +411,11 @@ namespace PCA {
             int row=i+1;
             Detection<T> *det=new Detection<T>(xpos[i],ypos[i],nvar);
             int ncoeff=(order[i]+1)*(order[i]+2)/2;      // psf values
-            //cout<<xpos[i]<<" "<<ypos[i]<<" "<<ncoeff<<endl;
             std::valarray<double> coeffs;
             table.column("shapelets").read(coeffs, row); 
-            //cout<<" "<<ichip<<" "<<xpos[i]<<" "<<ypos[i]<<" "<<coeffs[shapeStart]<<" "<<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
+            FILE_LOG(logDEBUG1)<<"adding object "<<ichip<<" "<<xpos[i]<<" "
+                               <<ypos[i]<<" "<<coeffs[shapeStart]<<" "
+                               <<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
             for(int j=0;j<nvar;++j) {
               
               det->setVal(j,coeffs[shapeStart+j]);
@@ -423,7 +427,7 @@ namespace PCA {
         
       }
       catch (CCfits::FitsException& ) {
-        cout<<"Can't open chip: "<<inputFile.str()<<" from exposure "<<exp<<" skipping"<<endl;
+        FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()<<" from exposure "<<exp<<" skipping"<<endl;
         return false;
       }
       
@@ -461,20 +465,19 @@ namespace PCA {
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     int ntotvar=iter->second->getCell(0)->getNVal(type,params);
-    //cout<<"Total vars: "<<ntotvar*nfocal<<" chips: "<<chips.size()<<endl;
+    FILE_LOG(logDEBUG)<<"Getting data from "<<label<<" total vars: "<<ntotvar*nfocal<<" chips: "<<chips.size()<<endl;
     tmv::Vector<T> v(ntotvar*nfocal,0.0);
     int cur_index=0;
     int cur_chip=0;
     
     for(; iter!=chips.end();++iter,cur_chip++) {
-      //cout<<"Get vals from chip: "<<iter->first<<endl;
+      FILE_LOG(logDEBUG)<<" Get vals from chip: "<<iter->first<<endl;
       std::vector<T> cv=iter->second->getVals(type,params);
-      //cout<<"Got "<<cv.size()<<endl;
       for(int j=0;j<cv.size();++j) {
         
         // really complicated to match current structure
         // this is probably wrong
-        //cout<<"  "<<j<<" "<<nfocal*(j%ntotvar)+cur_chip*nchip_var+j/(ntotvar)<<endl;
+        //FILE_LOG(logINFO)<<"  "<<j<<" "<<nfocal*(j%ntotvar)+cur_chip*nchip_var+j/(ntotvar)<<endl;
         v[nfocal*(j%ntotvar)+cur_chip*nchip_var+j/(ntotvar)]=cv[j];
 
         // I want to switch to this once I am willing to change all my 

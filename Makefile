@@ -34,7 +34,7 @@ clean:
 OBJtmv = $(fileName).o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
 	PCAuseWiberg.o rmDefocus.o ConfigFile.o PCAObjects.o
 
-$(fileName).o: $(fileName).cpp myClass.h
+$(fileName).o: $(fileName).cpp myClass.h myIO.h Log.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE) 
 $(fileName): $(OBJtmv)
 	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS) -o $(fileName)
@@ -62,5 +62,5 @@ PCAuseWiberg.o: PCAuseWiberg.cpp PCAuseWiberg.h
 
 rmDefocus.o: rmDefocus.cpp rmDefocus.h
 	$(GCC) $(CXXFLAGS) -c -o $@ rmDefocus.cpp $(INCLUDE)
-PCAObjects.o: PCAObjects.cpp PCAObjects.h
+PCAObjects.o: PCAObjects.cpp PCAObjects.h Log.h 
 	$(GCC) $(CXXFLAGS) -c -o $@ PCAObjects.cpp $(INCLUDE)

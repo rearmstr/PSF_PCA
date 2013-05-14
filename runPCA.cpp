@@ -5,6 +5,7 @@
 #include "myIO.h"
 #include "ConfigFile.h"
 #include <cassert>
+#include "Log.h"
 using namespace std;
 using namespace PCA;
 std::ostream* dbgout = 0;
@@ -103,9 +104,10 @@ int main(int argc,char*argv[])
   bool do_exp_rej=params.read<bool>("do_exp_rej",true);
   int fit_order=params.read<int>("fit_order",-1);
   float sigma_clip=params.read<float>("sigma_clip",-1.);
+  int logging=params.read<int>("logging",3);
 
-  cout<<"Settings..."<<endl;
-  cout<<params<<endl;
+  FILELog::ReportingLevel() = FILELog::FromInt(logging);
+  FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
 
   ifstream file(filename.c_str());  
   string name;
@@ -177,27 +179,27 @@ int main(int argc,char*argv[])
     int noutlier=0;
     int outlier_iter=0;
     do {
-      cout<<"\nOutlier rejection iter "<<outlier_iter<<endl;
-      //cout<<"Exposures remaining: "<<U.nrows()<<endl;
+      FILE_LOG(logINFO)<<"\nOutlier rejection iter "<<outlier_iter<<endl;
+      //FILE_LOG(logINFO)<<"Exposures remaining: "<<U.nrows()<<endl;
       vector<bool> outliers;
       noutlier=identifyOutliers<DMatrix>(U,outliers,exp_cut);
       int nexp_cur=U.nrows();
       int iexp=0;
-      cout<<"Found "<<noutlier<<" outliers"<<endl;
+      FILE_LOG(logINFO)<<"Found "<<noutlier<<" outliers"<<endl;
 
       for(int i=0;i<nexp;++i) {
         if(exps[i].isOutlier()) continue;
         
         if(outliers[iexp]) {
-          cout<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
+          FILE_LOG(logINFO)<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
           exps[i].setOutlier(1);
         }
         iexp++;
       }
-      //cout<<"Found "<<iexp<<" that were not rejected "<<endl;
+      FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected "<<endl;
       if(noutlier>0) {
       int nexp_cut=nexp_cur-noutlier;
-      //cout<<"Reducing size to "<<nexp_cut<<endl;
+      FILE_LOG(logDEBUG)<<"Reducing size to "<<nexp_cut<<endl;
       dataM.setZero();
       dataM.resize(nexp_cut,nvar);
       
