@@ -10,9 +10,9 @@ using namespace PCA;
 std::ostream* dbgout = 0;
 bool XDEBUG = false;
 
-
-void doSVD(FMatrix &data,int nvar,int nexp,FMatrix &U,
-           FDiagMatrix &Svec,FMatrix &Vt)
+template<class T1,class T2>
+void doSVD(T1 &data,int nvar,int nexp,T1 &U,
+           T2 &Svec,T1 &Vt)
 {
   if(nexp > nvar) {
     Vt.resize(nvar,nvar);
@@ -32,7 +32,8 @@ void doSVD(FMatrix &data,int nvar,int nexp,FMatrix &U,
   }
 }
 
-int identifyOutliers(FMatrix &m,vector<bool> &outliers,float cut)
+template<class T>
+int identifyOutliers(T &m,vector<bool> &outliers,float cut)
 {
   int noutlier=0;
   outliers.resize(m.nrows());
@@ -55,14 +56,13 @@ int identifyOutliers(FMatrix &m,vector<bool> &outliers,float cut)
   return noutlier;
 }
 
-
-void meanRemove(FMatrix &m)
+template<class T>
+void meanRemove(T &m)
 {
   for(int i=0;i<m.ncols();++i) {
 
-    FVectorView col=m.col(i);
     double sum=m.col(i).sumElements();
-    col.addToAll(-sum/m.nrows());
+    m.col(i).addToAll(-sum/m.nrows());
   }
 }
 
@@ -72,7 +72,7 @@ void meanRemove(FMatrix &m)
 int main(int argc,char*argv[])
 {
 
-  std::vector<Exposure> exps;
+  std::vector<Exposure<double> > exps;
 
   
   ConfigFile params;
@@ -111,7 +111,7 @@ int main(int argc,char*argv[])
   string name;
   while(file>>name) {
     
-    Exposure exp(name,ccd);
+    Exposure<double> exp(name,ccd);
     exp.setChipDivide(nx,ny);
     exp.setChipMax(xmax,ymax);
     if(skip61) exp.addSkip(61);
@@ -150,15 +150,15 @@ int main(int argc,char*argv[])
   
 
   // Build the data matrix
-  FMatrix dataM(nexp,nvar);
+  DMatrix dataM(nexp,nvar);
 
   for(int i=0;i<nexp;++i) {
-    FVector med=exps[i].getVals(type,vparams);
+    DVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
   }
 
   // output raw data file now before it is altered
-  outputToFileF (dataM.transpose(), outname+"_data");
+  writeMatrix(dataM,outname+"_data");
   
   // Remove mean from the data
   // probably can bemore efficient by using tmv operations
@@ -166,9 +166,9 @@ int main(int argc,char*argv[])
 
   
   // matrices for svd
-  FDiagMatrix Svec(1);
-  FMatrix U(1,1),Vt(1,1);
-  doSVD(dataM,nvar,nexp,U,Svec,Vt);
+  DDiagMatrix Svec(1);
+  DMatrix U(1,1),Vt(1,1);
+  doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp,U,Svec,Vt);
 
   if(do_exp_rej) {
     // Check for outliers at the exposure level
@@ -180,7 +180,7 @@ int main(int argc,char*argv[])
       cout<<"\nOutlier rejection iter "<<outlier_iter<<endl;
       //cout<<"Exposures remaining: "<<U.nrows()<<endl;
       vector<bool> outliers;
-      noutlier=identifyOutliers(U,outliers,exp_cut);
+      noutlier=identifyOutliers<DMatrix>(U,outliers,exp_cut);
       int nexp_cur=U.nrows();
       int iexp=0;
       cout<<"Found "<<noutlier<<" outliers"<<endl;
@@ -205,18 +205,18 @@ int main(int argc,char*argv[])
       for(int i=0;i<nexp;++i) {
         if(exps[i].isOutlier()) continue;
 
-        FVector med=exps[i].getVals(type,vparams);
+        DVector med=exps[i].getVals(type,vparams);
         dataM.row(cur_exp)=med;
         cur_exp++;
       }
 
       // do I really want to write/overwrite at each stage of the rejection
       // iteration?  Other option is to keep dataM and not modify it
-      outputToFileF (dataM.transpose(), outname+"_data");
-      
+      writeMatrix(dataM,outname+"_data");
+
       // Remove mean from variables
-      if(subtract_mean) meanRemove(dataM);
-      doSVD(dataM,nvar,nexp_cut,U,Svec,Vt);    
+      if(subtract_mean) meanRemove<DMatrix>(dataM);
+      doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp_cut,U,Svec,Vt);    
       }
       outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
@@ -228,11 +228,9 @@ int main(int argc,char*argv[])
     oexp<<exps[i].getLabel()<<endl;
   }
     
-    
-  outputToFileF (Vt.transpose(),  outname+"_vec");
-  outputToFileF (U.transpose(), outname+"_coeff");
-  outputToFileF (Svec.diag(), outname+"_singular"); 
+  writeMatrix(Vt,outname+"_vec");
+  writeMatrix(U,outname+"_coeff");
+  writeVector(Svec.diag(),outname+"_singular");
   
-  
-  }
-  
+}
+

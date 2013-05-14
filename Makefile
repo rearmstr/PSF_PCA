@@ -2,7 +2,7 @@
 # GCC = g++
 # CXXFLAGS = -pg -g
 GCC = mpicxx
-CXXFLAGS = -O3 
+CXXFLAGS = -g -O3
 
 # ============ MBPbnl =======================================================
 # INCLUDE = -I/Users/mzm/opt/include -I/usr/local/include/CCfits
@@ -24,7 +24,7 @@ LIBS = -L${TMV_DIR}/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
        -lmkl_sequential -lpthread -Wl,-rpath=/usr/global/tmv0.71/lib \
        -openmp -L/global/homes/r/rarmst/soft/lib -lCCfits -lcfitsio
 
-fileName=test
+fileName=runPCA
 
 all: $(fileName)
 clean:

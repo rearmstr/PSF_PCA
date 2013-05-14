@@ -9,9 +9,9 @@ namespace PCA {
   using std::cout;
   using std::endl;
 
-  static FVector definePXY(int order, float x, float xmin, float xmax)
+  static DVector definePXY(int order, float x, float xmin, float xmax)
   {
-    FVector temp(order+1);
+    DVector temp(order+1);
     double newx = (2.*x-xmin-xmax)/(xmax-xmin);
     temp[0] = 1.;
     if(order>0) temp[1] = newx;
@@ -21,12 +21,12 @@ namespace PCA {
     return temp;
   }
 
-  static void setPRow(int fitorder, Position<float> pos, const Bounds<float>& bounds, FVectorView prow)
+  static void setPRow(int fitorder, Position<float> pos, const Bounds<float>& bounds, DVectorView prow)
   {
     //Assert(int(prow.size()) == (fitorder+1)*(fitorder+2)/2);
-    FVector px =
+    DVector px =
       definePXY(fitorder,pos.x,bounds.getXMin(),bounds.getXMax());
-    FVector py =
+    DVector py =
       definePXY(fitorder,pos.y,bounds.getYMin(),bounds.getYMax());
     int pq = 0;
     for(int n=0;n<=fitorder;++n) {
@@ -41,8 +41,8 @@ namespace PCA {
 
 
 
-
-  int Cell::getNGood() {
+  template<class T>
+  int Cell<T>::getNGood() {
     int ngood=0;
     for(int i=0;i<dets.size();++i) {
       if(!dets[i]->isClipped()) ngood++;
@@ -50,7 +50,8 @@ namespace PCA {
     return ngood;
   }
 
-  int Cell::getNClip() {
+  template<class T>
+  int Cell<T>::getNClip() {
     int nclip=0;
     for(int i=0;i<dets.size();++i) {
       if(dets[i]->isClipped()) nclip++;
@@ -59,9 +60,10 @@ namespace PCA {
   }
   // Return the mean values of all the detections in a cell
   // if no detections found it will return a zero
-  std::vector<float> Cell::getMeanVals()
+  template<class T>
+  std::vector<T> Cell<T>::getMeanVals()
   {
-    std::vector<float> v(nvar,defaultVal);
+    std::vector<T> v(nvar,defaultVal);
     if(dets.size()==0) return v;
         
     for(int j=0;j<nvar;++j) v[j]=0;
@@ -82,18 +84,19 @@ namespace PCA {
   }
 
   // Return the median values of all the detections in a cell
-  std::vector<float> Cell::getMedianVals()
+  template<class T>
+  std::vector<T> Cell<T>::getMedianVals()
   {
-    std::vector<float> v(nvar,defaultVal);
+    std::vector<T> v(nvar,defaultVal);
     if(dets.size()==0) return v;
     for(int j=0;j<nvar;++j) v[j]=0;
 
     for(int j=0;j<nvar;++j) {
-      std::vector<float> tmp(dets.size());      
+      std::vector<T> tmp(dets.size());      
       for(int i=0;i<dets.size();++i) {
         tmp[i]=dets[i]->getVal(j);
       }
-      v[j]=median<float>(tmp);
+      v[j]=median<T>(tmp);
       //cout<<"    Cell var "<<j<<" "<<v[j]<<endl;
     }
 
@@ -102,16 +105,17 @@ namespace PCA {
   }
 
   // Return the median values of all the detections in a cell
-  std::vector<float> Cell::getMeanClipVals(float clip)
+  template<class T>
+  std::vector<T> Cell<T>::getMeanClipVals(float clip)
   {
-    std::vector<float> v(nvar,defaultVal);
+    std::vector<T> v(nvar,defaultVal);
     if(dets.size()==0) return v;
     for(int j=0;j<nvar;++j) v[j]=0;
     //cout<<"Cell "<<endl;
     //iterate once through the variables to label outliers using the
     //the median absolute deviation
     for(int j=0;j<nvar;++j) {
-      std::vector<float> tmp(dets.size());      
+      std::vector<T> tmp(dets.size());      
       for(int i=0;i<dets.size();++i) {
         tmp[i]=dets[i]->getVal(j);
       }
@@ -148,17 +152,18 @@ namespace PCA {
 
 
   // Return the median values of all the detections in a cell
-  std::vector<float> Cell::getFitVals(int order)
+  template<class T>
+  std::vector<T> Cell<T>::getFitVals(int order)
   {
     fitorder=order;
     int nfit=(fitorder+1)*(fitorder+2)/2;
-    std::vector<float> v(nvar*nfit,defaultVal);
+    std::vector<T> v(nvar*nfit,defaultVal);
     if(dets.size()==0) return v;
-    FMatrix b(dets.size(),nvar);
-    FMatrix A(dets.size(),nfit);
+    DMatrix b(dets.size(),nvar);
+    DMatrix A(dets.size(),nfit);
 
     for(int j=0;j<nvar;++j) {
-      std::vector<float> tmp(dets.size());      
+      std::vector<T> tmp(dets.size());      
       for(int i=0;i<dets.size();++i) {
         b(i,j)=dets[i]->getVal(j);
       }
@@ -168,7 +173,7 @@ namespace PCA {
       setPRow(fitorder,dets[n]->getPos(),bounds,A.row(n));
     }
 
-    FMatrix x=b/A;
+    DMatrix x=b/A;
     int cur=0;
     for(int i=0;i<x.nrows();++i) {
       for(int j=0;j<x.ncols();++j) {
@@ -182,7 +187,8 @@ namespace PCA {
 
   }
       
-  std::vector<float> Cell::getVals(std::string type,std::vector<float> &params)
+  template<class T>
+  std::vector<T> Cell<T>::getVals(std::string type,std::vector<float> &params)
   {
     if(getTypeFromString(type)==Mean) {
       return getMeanVals();
@@ -202,8 +208,9 @@ namespace PCA {
     }
     
   }
-
-  int Cell::getNVal(std::string type,std::vector<float> &params)
+  
+  template<class T>
+  int Cell<T>::getNVal(std::string type,std::vector<float> &params)
   {
   
     if(getTypeFromString(type)==Mean) {
@@ -222,23 +229,24 @@ namespace PCA {
     }
   }
 
-
-
-  int Chip::getNClip()
+  template<class T>
+  int Chip<T>::getNClip()
   {
     int nclip=0;
     for(int i=0;i<cells.size();++i) nclip+=cells[i]->getNClip();
     return nclip;
   }
 
-  int Chip::getNGood()
+  template<class T>
+  int Chip<T>::getNGood()
   {
     int ngood=0;
     for(int i=0;i<cells.size();++i) ngood+=cells[i]->getNGood();
     return ngood;
   }
 
-  int Chip::getNDet()
+  template<class T>
+  int Chip<T>::getNDet()
   {
     int ndet=0;
     for(int i=0;i<cells.size();++i) ndet+=cells[i]->getNDet();
@@ -248,16 +256,17 @@ namespace PCA {
   // Get the mean values of all the cells in a chip
   // The ordering of the variables are 
   // Ce1l 1 var1..varN, Cell2 var1..varN, Cell3...
-  std::vector<float> Chip::getVals(std::string type,std::vector<float> &params)
+  template<class T>
+  std::vector<T> Chip<T>::getVals(std::string type,std::vector<float> &params)
   { 
 
     // assume all cells have the same number
     int ntotvar=cells[0]->getNVal(type,params);
-    std::vector<float> v(ntotvar*cells.size());
+    std::vector<T> v(ntotvar*cells.size());
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
       //cout<<"  Get vals from cell "<<i<<endl;
-      std::vector<float> cv=cells[i]->getVals(type,params);
+      std::vector<T> cv=cells[i]->getVals(type,params);
       for(int j=0;j<ntotvar;++j) {
         v[cur_index]=cv[j];
         cur_index++;
@@ -266,7 +275,8 @@ namespace PCA {
     return v;
   }
 
-  std::vector<bool> Chip::getMissing()
+  template<class T>
+  std::vector<bool> Chip<T>::getMissing()
   {
     std::vector<bool> v(cells.size(),false);
     int cur_index=0;
@@ -276,19 +286,20 @@ namespace PCA {
     return v;
   }
   
-  void Chip::divide(int nvar,int _nx,int _ny) {
+  template<class T>
+  void Chip<T>::divide(int nvar,int _nx,int _ny) {
     nx=_nx;
     ny=_ny;
     std::vector<Bounds<float> > vb=bounds.divide(nx,ny);
     for(int i=0;i<vb.size();++i) {
-      Cell *cell=new Cell(nvar,vb[i]);
+      Cell<T> *cell=new Cell<T>(nvar,vb[i]);
       cells.push_back(cell);
       cbounds.push_back(vb[i]);
     }
   }
   
-
-  void Chip::addDet(Detection *det) {
+  template<class T>
+  void Chip<T>::addDet(Detection<T> *det) {
 
     // The bounds class has the y as the fast moving coordinate
     int bin_x=static_cast<int>(det->getPos().x/(bounds.getXMax()/nx));
@@ -299,26 +310,26 @@ namespace PCA {
   }
 
 
-
-  Exposure::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
+  template<class T>
+  Exposure<T>::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
     label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
     nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3),outlier(0) {}
 
-
-  int Exposure::getNClip()
+  template<class T>
+  int Exposure<T>::getNClip()
   {
     int nclip=0;
-    std::map<int,Chip*>::const_iterator iter=chips.begin();
+    typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     for(; iter!=chips.end();++iter) nclip+=iter->second->getNClip();
     return nclip;
   }
 
-
-  int Exposure::getNGood()
+  template<class T>
+  int Exposure<T>::getNGood()
   {
     int ngood=0;
-    std::map<int,Chip*>::const_iterator iter=chips.begin();
+    typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     for(; iter!=chips.end();++iter) ngood+=iter->second->getNGood();
     return ngood;
@@ -326,11 +337,11 @@ namespace PCA {
 
 
 
-
-  int Exposure::getNDet()
+  template<class T>
+  int Exposure<T>::getNDet()
   {
     int ndet=0;
-    std::map<int,Chip*>::const_iterator iter=chips.begin();
+    typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     for(; iter!=chips.end();++iter) ndet+=iter->second->getNDet();
     return ndet;
@@ -338,13 +349,13 @@ namespace PCA {
 
 
 
-
-  bool Exposure::readShapelet(std::string dir,int nvar,bool use_dash,std::string exp) {
+  template<class T>
+  bool Exposure<T>::readShapelet(std::string dir,int nvar,bool use_dash,std::string exp) {
     if (exp.empty()) exp=label;
     cout << "Reading exposure " << exp<< endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
       
-      Chip *chip=new Chip(ichip,xmax_chip,ymax_chip);
+      Chip<T> *chip=new Chip<T>(ichip,xmax_chip,ymax_chip);
       chip->divide(nvar,nx_chip,ny_chip);
 
       // check if this chip should be skipped
@@ -395,7 +406,7 @@ namespace PCA {
           if (!psf_flags[i]) {          // pass psf flags
             
             int row=i+1;
-            Detection *det=new Detection(xpos[i],ypos[i],nvar);
+            Detection<T> *det=new Detection<T>(xpos[i],ypos[i],nvar);
             int ncoeff=(order[i]+1)*(order[i]+2)/2;      // psf values
             //cout<<xpos[i]<<" "<<ypos[i]<<" "<<ncoeff<<endl;
             std::valarray<double> coeffs;
@@ -423,13 +434,13 @@ namespace PCA {
     return true;
   }
   
-
-  std::vector<bool> Exposure::getMissing()
+  template<class T>
+  std::vector<bool> Exposure<T>::getMissing()
   {
     int nchip_var=ny_chip*nx_chip;
     int ncell=chips.size()*ny_chip*nx_chip;
     std::vector<bool> v(ncell,false);
-    std::map<int,Chip*>::const_iterator iter=chips.begin();
+    typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     int cur_index=0;    
     for(; iter!=chips.end();++iter) {
@@ -441,22 +452,23 @@ namespace PCA {
     return v;
   }
 
-  tmv::Vector<float> Exposure::getVals(std::string type,std::vector<float> &params)
+  template<class T>
+  tmv::Vector<T> Exposure<T>::getVals(std::string type,std::vector<float> &params)
   { 
     int nchip_var=ny_chip*nx_chip;
     int nfocal=chips.size()*nchip_var;
 
-    std::map<int,Chip*>::const_iterator iter=chips.begin();
+    typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     int ntotvar=iter->second->getCell(0)->getNVal(type,params);
     //cout<<"Total vars: "<<ntotvar*nfocal<<" chips: "<<chips.size()<<endl;
-    tmv::Vector<float> v(ntotvar*nfocal,0.0);
+    tmv::Vector<T> v(ntotvar*nfocal,0.0);
     int cur_index=0;
     int cur_chip=0;
     
     for(; iter!=chips.end();++iter,cur_chip++) {
       //cout<<"Get vals from chip: "<<iter->first<<endl;
-      std::vector<float> cv=iter->second->getVals(type,params);
+      std::vector<T> cv=iter->second->getVals(type,params);
       //cout<<"Got "<<cv.size()<<endl;
       for(int j=0;j<cv.size();++j) {
         
@@ -476,6 +488,14 @@ namespace PCA {
   }
 
 
+  template class Detection<float> ;
+  template class Detection<double> ;
+  template class Cell<float> ;
+  template class Cell<double> ;
+  template class Chip<float> ;
+  template class Chip<double> ;
+  template class Exposure<float> ;
+  template class Exposure<double> ;
 
 
 };

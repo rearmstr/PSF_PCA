@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <fstream>
 
 void inputFromFile(std::string,c_ControlParam &,c_Data &);  // Xmat; all data in one file
                                                             // vector is a line in file
@@ -27,5 +28,36 @@ void outputArr(int,std::vector<double>&,std::string);      // output a double ar
 
 std::string convertInt(int);                               // convert an integer to string
 bool FileExists(std::string);                              // check file or dir existance
+
+template<class T>
+void writeMatrix(const T & mat,std::string fileName)
+{                  
+  std::ofstream myfile(fileName.c_str());                     
+
+  myfile.precision(7);
+
+  for (size_t i=0; i < mat.nrows(); i++) { 
+    for (size_t j=0; j < mat.ncols(); j++) {
+      myfile << mat(i,j) << "  "; 
+    }
+    myfile<<std::endl;
+  }
+  
+}
+
+template<class T>
+void writeVector(const T & vec,std::string fileName)
+{                  
+  std::ofstream myfile(fileName.c_str());                     
+
+  myfile.precision(7);
+
+  for (size_t i=0; i < vec.size(); i++) { 
+      myfile << vec(i) << "  "; 
+  }
+  myfile<<std::endl;
+  
+}
+
 
 #endif

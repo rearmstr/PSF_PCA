@@ -36,6 +36,7 @@ namespace PCA {
 
   static const float defaultVal  = -9999.0;
 
+template<class T=double>
 class Detection {
 
  public:
@@ -43,16 +44,16 @@ class Detection {
   Detection(float x,float y,int nobs) :pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
   
   Position<float> getPos() {return pos;}
-  std::vector<float> getVals() {return vals;}
+  std::vector<T> getVals() {return vals;}
   float getVal(int i) {
     if(i>=0 && i<nval) return vals[i];
     return -9999.0;
   }
-  void setVal(int i,float val) {
+  void setVal(int i,T val) {
     if(i>=0 && i<nval) vals[i]=val;
   }
   // need to think how we will get these values for vector settings
-  void setVals(std::vector<float> &_vals) {
+  void setVals(std::vector<T> &_vals) {
     vals=_vals;
    }
   void setClip(bool val) {clip=val;}
@@ -61,7 +62,7 @@ class Detection {
 protected:
   int nval;
   Position<float> pos;
-  std::vector<float> vals;
+  std::vector<T> vals;
   bool clip;
 };
 
@@ -70,6 +71,7 @@ protected:
 // Cell contains potentially many detections, the ares is rectangular (for now)
 // May want outlier rejection and estimation mean/median
 // done in this class
+template<class T=double>
 class Cell {
 
 
@@ -77,17 +79,17 @@ public:
 
   Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax) {}
   Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
-  void addDet(Detection* _det) {dets.push_back(_det);}
+  void addDet(Detection<T>* _det) {dets.push_back(_det);}
   int getNDet() {return dets.size();}
   int getNClip();
   int getNGood();
 
-  std::vector<float> getVals(std::string type,std::vector<float> &params);
+  std::vector<T> getVals(std::string type,std::vector<float> &params);
 
-  std::vector<float> getMeanVals();
-  std::vector<float> getMeanClipVals(float clip);
-  std::vector<float> getMedianVals();
-  std::vector<float> getFitVals(int order=1);
+  std::vector<T> getMeanVals();
+  std::vector<T> getMeanClipVals(float clip);
+  std::vector<T> getMedianVals();
+  std::vector<T> getFitVals(int order=1);
 
 
   int getNVal(std::string type,std::vector<float> &params);
@@ -107,25 +109,25 @@ private:
   int nvar;
   int fitorder;
   Bounds<float> bounds;
-  std::vector<Detection*> dets;
+  std::vector<Detection<T>* > dets;
   
 
 };
 
 
-
+template<class T=double>
 class Chip {
 
 public:
   // assume chip starts at zero,zero
   Chip(int _label,float xmax,float ymax): label(_label),bounds(0,xmax,0,ymax) {}
-  void addDet(Detection* det);
+  void addDet(Detection<T>* det);
   void divide(int nvar, int _nx,int _ny); // setup the cell sizes
-  std::vector<float> getVals(std::string type,std::vector<float> &params);
+  std::vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
-  Cell* getCell(int i) {return cells[i];}
-  Cell* operator[](int i) {return cells[i];}
+  Cell<T>* getCell(int i) {return cells[i];}
+  Cell<T>* operator[](int i) {return cells[i];}
   int getNClip();
   int getNGood();
   int getNDet();
@@ -135,13 +137,13 @@ private:
   int nvar;
   Bounds<float> bounds;
   std::vector<Bounds<float> > cbounds;
-  std::vector<Cell*> cells;
+  std::vector<Cell<T>*> cells;
   int nx;
   int ny;
   
 };
 
-
+template<class T=double>
 class Exposure {
 
 public:
@@ -156,15 +158,15 @@ public:
     ymax_chip=ymax;
   }
   
-  Chip* operator[](int i) {return chips[i];}
-  Chip* getChip(int i) {return chips[i];}
+  Chip<T>* operator[](int i) {return chips[i];}
+  Chip<T>* getChip(int i) {return chips[i];}
   
   void setShapeStart(int start) {shapeStart=start;}
   void addSkip(int ichip) { skip.push_back(ichip);}
-  void addChip(int ichip,Chip *chip) { chips[ichip]=chip;}
+  void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
-  tmv::Vector<float> getVals(std::string type,std::vector<float> &params);
+  tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}
@@ -179,7 +181,7 @@ private:
   int nx_chip;
   int ny_chip;
   std::string label;
-  std::map<int,Chip*> chips;
+  std::map<int,Chip<T>*> chips;
   std::vector<int> skip;
   int nchip;
   int nvar;
