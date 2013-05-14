@@ -1,11 +1,12 @@
-#ifndef PCA_OBJECTS_JH
-#define PCA_OBJECTS_JH 1
+#ifndef PCA_OBJECTS_H
+#define PCA_OBJECTS_H 1
 
 #include "Bounds.h"
 #include <vector>
 #include <map>
 #include <algorithm>
 #include "TMV.h"
+#include <cassert>
 // Generic detection object that can hold any type of data
 // for the PCA
 
@@ -64,6 +65,8 @@ protected:
   bool clip;
 };
 
+
+
 // Cell contains potentially many detections, the ares is rectangular (for now)
 // May want outlier rejection and estimation mean/median
 // done in this class
@@ -75,20 +78,37 @@ public:
   Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax) {}
   Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
   void addDet(Detection* _det) {dets.push_back(_det);}
-  int getNDet();
+  int getNDet() {return dets.size();}
+  int getNClip();
+  int getNGood();
+
+  std::vector<float> getVals(std::string type,std::vector<float> &params);
+
   std::vector<float> getMeanVals();
   std::vector<float> getMeanClipVals(float clip);
   std::vector<float> getMedianVals();
   std::vector<float> getFitVals(int order=1);
-  std::vector<float> getVals(std::string type);
-  int getNVal(std::string type);
-  //tmv::Vector<float> getTMVVals();
+
+
+  int getNVal(std::string type,std::vector<float> &params);
+
+  enum ValType {Mean=1,MeanClip=2,Median=3,Fit=4};
+
+  ValType getTypeFromString(std::string type) {
+    if(type=="mean") return Mean;
+    if(type=="mean_clip") return MeanClip;
+    if(type=="median") return Median;
+    if(type=="fit") return Fit;
+    std::cout<<"Not a valid type: "<<type<<std::endl;
+    assert(0);
+  };
 
 private:
   int nvar;
   int fitorder;
   Bounds<float> bounds;
   std::vector<Detection*> dets;
+  
 
 };
 
@@ -101,11 +121,14 @@ public:
   Chip(int _label,float xmax,float ymax): label(_label),bounds(0,xmax,0,ymax) {}
   void addDet(Detection* det);
   void divide(int nvar, int _nx,int _ny); // setup the cell sizes
-  std::vector<float> getVals(std::string type);
+  std::vector<float> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
   Cell* getCell(int i) {return cells[i];}
   Cell* operator[](int i) {return cells[i];}
+  int getNClip();
+  int getNGood();
+  int getNDet();
 
 private:
   int label;
@@ -141,11 +164,14 @@ public:
   void addChip(int ichip,Chip *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
-  tmv::Vector<float> getVals(std::string type);
+  tmv::Vector<float> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}
   void setOutlier(bool val) {outlier=val;}
+  int getNClip();
+  int getNGood();
+  int getNDet();
 
 private:
   float xmax_chip;

@@ -4,6 +4,7 @@
 #include "myClass.h"
 #include "myIO.h"
 #include "ConfigFile.h"
+#include <cassert>
 using namespace std;
 using namespace PCA;
 std::ostream* dbgout = 0;
@@ -100,7 +101,8 @@ int main(int argc,char*argv[])
   std::string prefix=params.read<std::string>("prefix","");
   int max_outlier_iter=params.read<int>("max_outlier_iter",100);
   bool do_exp_rej=params.read<bool>("do_exp_rej",true);
-  //bool skip61= params.read<bool>("skip61",true);
+  int fit_order=params.read<int>("fit_order",-1);
+  float sigma_clip=params.read<float>("sigma_clip",-1.);
 
   cout<<"Settings..."<<endl;
   cout<<params<<endl;
@@ -133,14 +135,25 @@ int main(int argc,char*argv[])
   int nexp=exps.size();
   // scale the number of variables to include the total number per exposure
   nvar*=nx*ny*nccd;
+  std::vector<float> vparams(1,0.);
+  
+  if(type=="fit") {
+    assert(fit_order>0);
+    vparams[0]=fit_order; 
+    nvar*=(fit_order+1)*(fit_order+2)/2;
+  }
+  if(type=="mean_clip") {
+    assert(sigma_clip>0);
+    vparams[0]=sigma_clip; 
+  }
 
-  if(type=="plin") nvar*=3; // fit a linear term to each cell
-  if(type=="pquad") nvar*=6;// fit a quadratic function to each cell
+  
 
   // Build the data matrix
   FMatrix dataM(nexp,nvar);
+
   for(int i=0;i<nexp;++i) {
-    FVector med=exps[i].getVals(type);
+    FVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
   }
 
@@ -192,7 +205,7 @@ int main(int argc,char*argv[])
       for(int i=0;i<nexp;++i) {
         if(exps[i].isOutlier()) continue;
 
-        FVector med=exps[i].getVals(type);
+        FVector med=exps[i].getVals(type,vparams);
         dataM.row(cur_exp)=med;
         cur_exp++;
       }

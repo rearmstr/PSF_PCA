@@ -3,6 +3,7 @@
 #include "TMV.h"
 #include <sstream>
 #include "myTypeDef.h"
+#include <cassert>
 namespace PCA {
 
   using std::cout;
@@ -41,11 +42,20 @@ namespace PCA {
 
 
 
-  int Cell::getNDet() {
+  int Cell::getNGood() {
     int ngood=0;
     for(int i=0;i<dets.size();++i) {
       if(!dets[i]->isClipped()) ngood++;
     }
+    return ngood;
+  }
+
+  int Cell::getNClip() {
+    int nclip=0;
+    for(int i=0;i<dets.size();++i) {
+      if(dets[i]->isClipped()) nclip++;
+    }
+    return nclip;
   }
   // Return the mean values of all the detections in a cell
   // if no detections found it will return a zero
@@ -172,67 +182,82 @@ namespace PCA {
 
   }
       
-  std::vector<float> Cell::getVals(std::string type)
+  std::vector<float> Cell::getVals(std::string type,std::vector<float> &params)
   {
-    if(type=="mean") {
+    if(getTypeFromString(type)==Mean) {
       return getMeanVals();
     }
-    else if(type=="mean_clip3") {
-      return getMeanClipVals(3);
+    else if(getTypeFromString(type)==MeanClip) {
+      assert(params.size()>=1);
+      float sigma_clip=params[0];
+      return getMeanClipVals(sigma_clip);
     }
-    else if(type=="mean_clip4") {
-      return getMeanClipVals(4);
-    }
-    else if(type=="median") {
+    else if(getTypeFromString(type)==Median) {
       return getMedianVals();
     }
-    else if(type=="plin") {
-      return getFitVals(1);
-    }
-    else if(type=="pquad") {
-      return getFitVals(2);
+    else if(getTypeFromString(type)==Fit) {
+      assert(params.size()>=1);
+      int order=static_cast<int>(params[0]);
+      return getFitVals(order);
     }
     
   }
 
-  int Cell::getNVal(std::string type)
+  int Cell::getNVal(std::string type,std::vector<float> &params)
   {
   
-    if(type=="mean") {
+    if(getTypeFromString(type)==Mean) {
       return nvar;
     }
-    if(type=="mean_clip3") {
+    else if(getTypeFromString(type)==MeanClip) {
       return nvar;
     }
-    if(type=="mean_clip4") {
+    else if(getTypeFromString(type)==Median) {
       return nvar;
     }
-    else if(type=="median") {
-      return nvar;
-    }
-    else if(type=="plin") {
-      // need to check that this is consistent
-      return nvar*3;//(fitorder+1)*(fitorder+2)/2;
-    }
-    else if(type=="pquad") {
-      // need to check that this is consistent
-      return nvar*6;//(fitorder+1)*(fitorder+2)/2;
+    else if(getTypeFromString(type)==Fit) {
+      assert(params.size()>=1);
+      int fitorder=static_cast<int>(params[0]);
+      return nvar*(fitorder+1)*(fitorder+2)/2;
     }
   }
 
+
+
+  int Chip::getNClip()
+  {
+    int nclip=0;
+    for(int i=0;i<cells.size();++i) nclip+=cells[i]->getNClip();
+    return nclip;
+  }
+
+  int Chip::getNGood()
+  {
+    int ngood=0;
+    for(int i=0;i<cells.size();++i) ngood+=cells[i]->getNGood();
+    return ngood;
+  }
+
+  int Chip::getNDet()
+  {
+    int ndet=0;
+    for(int i=0;i<cells.size();++i) ndet+=cells[i]->getNDet();
+    return ndet;
+  }
+       
   // Get the mean values of all the cells in a chip
   // The ordering of the variables are 
   // Ce1l 1 var1..varN, Cell2 var1..varN, Cell3...
-  std::vector<float> Chip::getVals(std::string type)
+  std::vector<float> Chip::getVals(std::string type,std::vector<float> &params)
   { 
 
     // assume all cells have the same number
-    int ntotvar=cells[0]->getNVal(type);
+    int ntotvar=cells[0]->getNVal(type,params);
     std::vector<float> v(ntotvar*cells.size());
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
       //cout<<"  Get vals from cell "<<i<<endl;
-      std::vector<float> cv=cells[i]->getVals(type);
+      std::vector<float> cv=cells[i]->getVals(type,params);
       for(int j=0;j<ntotvar;++j) {
         v[cur_index]=cv[j];
         cur_index++;
@@ -246,7 +271,7 @@ namespace PCA {
     std::vector<bool> v(cells.size(),false);
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
-      if(cells[i]->getNDet()==0) v[i]=true;
+      if(cells[i]->getNGood()==0) v[i]=true;
     }
     return v;
   }
@@ -278,6 +303,41 @@ namespace PCA {
   Exposure::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
     label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
     nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3),outlier(0) {}
+
+
+  int Exposure::getNClip()
+  {
+    int nclip=0;
+    std::map<int,Chip*>::const_iterator iter=chips.begin();
+
+    for(; iter!=chips.end();++iter) nclip+=iter->second->getNClip();
+    return nclip;
+  }
+
+
+  int Exposure::getNGood()
+  {
+    int ngood=0;
+    std::map<int,Chip*>::const_iterator iter=chips.begin();
+
+    for(; iter!=chips.end();++iter) ngood+=iter->second->getNGood();
+    return ngood;
+  }
+
+
+
+
+  int Exposure::getNDet()
+  {
+    int ndet=0;
+    std::map<int,Chip*>::const_iterator iter=chips.begin();
+
+    for(; iter!=chips.end();++iter) ndet+=iter->second->getNDet();
+    return ndet;
+  }
+
+
+
 
   bool Exposure::readShapelet(std::string dir,int nvar,bool use_dash,std::string exp) {
     if (exp.empty()) exp=label;
@@ -381,14 +441,14 @@ namespace PCA {
     return v;
   }
 
-  tmv::Vector<float> Exposure::getVals(std::string type)
+  tmv::Vector<float> Exposure::getVals(std::string type,std::vector<float> &params)
   { 
     int nchip_var=ny_chip*nx_chip;
     int nfocal=chips.size()*nchip_var;
 
     std::map<int,Chip*>::const_iterator iter=chips.begin();
 
-    int ntotvar=iter->second->getCell(0)->getNVal(type);
+    int ntotvar=iter->second->getCell(0)->getNVal(type,params);
     //cout<<"Total vars: "<<ntotvar*nfocal<<" chips: "<<chips.size()<<endl;
     tmv::Vector<float> v(ntotvar*nfocal,0.0);
     int cur_index=0;
@@ -396,7 +456,7 @@ namespace PCA {
     
     for(; iter!=chips.end();++iter,cur_chip++) {
       //cout<<"Get vals from chip: "<<iter->first<<endl;
-      std::vector<float> cv=iter->second->getVals(type);
+      std::vector<float> cv=iter->second->getVals(type,params);
       //cout<<"Got "<<cv.size()<<endl;
       for(int j=0;j<cv.size();++j) {
         
