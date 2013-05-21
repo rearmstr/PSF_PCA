@@ -1,8 +1,8 @@
 # TMV is compiled using g++. c++ is an older version of g++
 # GCC = g++
 # CXXFLAGS = -pg -g
-GCC = mpicxx
-CXXFLAGS = -O3 -g
+GCC = icpc
+CXXFLAGS = -g
 
 # ============ MBPbnl =======================================================
 # INCLUDE = -I/Users/mzm/opt/include -I/usr/local/include/CCfits
@@ -30,13 +30,20 @@ clean:
 	rm *.o
 	rm $(fileName)
 
-OBJtmv = $(fileName).o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
-PCAuseWiberg.o rmDefocus.o ConfigFile.o PCAObjects.o
+#OBJtmv = $(fileName).o NR.o initialize.o myIO.o PCAcommon.o PCAuseSVD.o PCAuseEM.o \
+#PCAuseWiberg.o rmDefocus.o ConfigFile.o PCAObjects.o
+
+OBJtmv = NR.o myIO.o ConfigFile.o PCAObjects.o
 
 $(fileName).o: $(fileName).cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE)
-$(fileName): $(OBJtmv)
+$(fileName): runPSF.o $(OBJtmv) PCAObjects.o
 	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS)
+
+getCoeff.o: getCoeff.cpp 
+	$(GCC) $(CXXFLAGS) -c -o $@ getCoeff.cpp $(INCLUDE)
+getCoeff: getCoeff.o $(OBJtmv)
+	$(GCC) $(CXXFLAGS) -o $@ getCoeff.o $(OBJtmv) $(LIBS)
 
 test_svd.o: test_svd.cc 
 	$(GCC) $(CXXFLAGS) -c -o $@ test_svd.cc $(INCLUDE)
