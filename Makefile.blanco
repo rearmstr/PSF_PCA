@@ -37,8 +37,8 @@ OBJtmv = NR.o myIO.o ConfigFile.o PCAObjects.o
 
 $(fileName).o: $(fileName).cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE)
-$(fileName): runPSF.o $(OBJtmv) PCAObjects.o
-	$(GCC) $(CXXFLAGS) -o $(fileName) $(OBJtmv) $(LIBS)
+$(fileName): runPCA.o $(OBJtmv) PCAObjects.o
+	$(GCC) $(CXXFLAGS) -o $(fileName) runPCA.o $(OBJtmv) $(LIBS)
 
 getCoeff.o: getCoeff.cpp 
 	$(GCC) $(CXXFLAGS) -c -o $@ getCoeff.cpp $(INCLUDE)
