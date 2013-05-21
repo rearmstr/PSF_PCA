@@ -1,5 +1,5 @@
-#ifndef __LOG1_H__
-#define __LOG1_H__
+#ifndef __LOG_H__
+#define __LOG_H__
 
 #include <sstream>
 #include <string>
@@ -38,7 +38,8 @@ inline std::ostringstream& Log::Get(TLogLevel level)
 {
   os <<"- " << NowTime();
   os << " " << ToString(level) << ": ";
-  os << std::string(level > logDEBUG ? level - logDEBUG : 0, ' ');
+  //os << std::string(level > logDEBUG ? level - logDEBUG : 0, ' ');
+  //os << std::string(level - logDEBUG, ' ');
   return os;
 }
 
@@ -50,7 +51,7 @@ inline Log::~Log()
 
 inline TLogLevel& Log::ReportingLevel()
 {
-    static TLogLevel reportingLevel = logDEBUG4;
+    static TLogLevel reportingLevel = logNONE;
     return reportingLevel;
 }
 
@@ -104,7 +105,6 @@ inline TLogLevel Log::FromInt(const int level)
     return logERROR;
   if (level == 0)
     return logNONE;
-  Log().Get(logWARN) << "Unknown logging level '" << level << "'. Using INFO level as default.";
   return logINFO;
 }
 

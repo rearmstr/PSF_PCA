@@ -383,13 +383,14 @@ namespace PCA {
 
 
       try {
+	FILE_LOG(logDEBUG) << "opening file " << inputFile.str()<<endl;
         std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(inputFile.str(),CCfits::Read));
         
         CCfits::ExtHDU& table = pInfile->extension(1);
         
         
         long nTabRows=table.rows();
-        
+	FILE_LOG(logDEBUG) << "found " << nTabRows<<" objects"<<endl;
         long start=1;
         long end=nTabRows;
         
