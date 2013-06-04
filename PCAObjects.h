@@ -103,6 +103,7 @@ public:
     if(type=="fit") return Fit;
     std::cout<<"Not a valid type: "<<type<<std::endl;
     assert(0);
+    return Mean;
   };
 
 private:
@@ -166,6 +167,8 @@ public:
   void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
+  bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
+		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
   std::string getLabel() {return label;}

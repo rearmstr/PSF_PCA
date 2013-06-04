@@ -5,6 +5,7 @@
 #include "myTypeDef.h"
 #include <cassert>
 #include "Log.h"
+#include "Image.h"
 namespace PCA {
 
   using std::cout;
@@ -102,7 +103,7 @@ namespace PCA {
     }
 
     return v;
-
+    
   }
 
   // Return the median values of all the detections in a cell
@@ -230,6 +231,7 @@ namespace PCA {
       int fitorder=static_cast<int>(params[0]);
       return nvar*(fitorder+1)*(fitorder+2)/2;
     }
+    return 0;
   }
 
   template<class T>
@@ -439,6 +441,154 @@ namespace PCA {
     return true;
   }
   
+
+  template<class T>
+  bool Exposure<T>::readPixels(std::string dir,int npix, int nvar,std::string sdir,
+			       bool use_dash,std::string exp) {
+    if (exp.empty()) exp=label;
+    FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
+    for(int ichip=1;ichip<=nchip;++ichip) {
+      
+      Chip<T> *chip=new Chip<T>(ichip,xmax_chip,ymax_chip);
+      chip->divide(nvar,nx_chip,ny_chip);
+
+      // check if this chip should be skipped
+      std::vector<int>::iterator iter=find(skip.begin(),skip.end(),ichip);
+      if(iter!=skip.end()) continue;
+      
+      std::stringstream inputFile;
+      inputFile << dir << "/" << exp << "_";
+      if(ichip<10) inputFile <<0;
+
+      inputFile << ichip << ".fits.fz";      
+
+      string image_file=inputFile.str();
+
+      std::stringstream inputFile2;
+      if(!use_dash) {
+        inputFile2 << sdir << "/" << exp << "_";
+      }
+      else {
+        inputFile2 << sdir << "/" << exp << "-";
+      }
+      if(ichip<10) inputFile2 <<0;
+      
+      if(!use_dash) {
+        inputFile2 << ichip << "_psf.fits";
+      }
+      else {
+        inputFile2 << ichip << "-psf.fits";
+      }
+      
+      string psf_file=inputFile2.str();
+
+      FILE_LOG(logDEBUG) << "Reading image file " << image_file<<endl;
+
+      Image<T> im (image_file,2); // main image
+      Image<T> wim(image_file,4); // weight image
+      Image<T> bpm(image_file,3); // bad pixel mask
+
+      FILE_LOG(logDEBUG) << "Reading psf file " << psf_file<<endl;
+      std::vector<Position<T> > pos;
+      std::vector<double> use_sky;
+      try {
+	std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(psf_file,CCfits::Read));
+	
+	CCfits::ExtHDU& table = pInfile->extension(1);
+	
+	
+	long nTabRows=table.rows();
+	FILE_LOG(logDEBUG) << "found " << nTabRows<<" objects"<<endl;
+	long start=1;
+	long end=nTabRows;
+	
+	std::vector<int> psf_flags;
+	std::vector<int> sky;
+	std::vector<double> xpos;
+	std::vector<double> ypos;
+	
+	table.column("psf_flags").read(psf_flags, start, end);
+	table.column("x").read(xpos, start, end);
+	table.column("y").read(ypos, start, end);
+	table.column("sky").read(sky, start, end);
+	
+	std::vector<long> order;       // shapelet order
+	
+	table.column("psf_order").read(order, start, end);
+	for (int i=0; i<nTabRows; i++) {
+	  if (!psf_flags[i]) {          // pass psf flags
+            
+	    pos.push_back(Position<T>(xpos[i],ypos[i]));
+	    use_sky.push_back(sky[i]);
+	  }
+	}
+      }
+      catch (CCfits::FitsException& ) {
+	FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()<<" from exposure "<<exp<<" skipping"<<endl;
+	return false;
+      }
+     
+      int app=npix;
+      int npixu=4*(app+1)*(app+1);
+      assert(npixu==nvar);
+      std::vector<double> pixels(nvar),weight(nvar);
+      // Loop over centers of objects and get sky-subtracted pixel lists
+      for(int istar=0;istar<pos.size();++istar) {
+
+	double xcen=pos[istar].x;
+	double ycen=pos[istar].y;
+	FILE_LOG(logDEBUG1)<<"Getting pixels around star : "<<istar<<" "
+			   <<pos[istar]<<" "<<endl;
+
+	int i1 = int(floor(xcen-app));
+	int i2 = int(ceil(xcen+app));
+	int j1 = int(floor(ycen-app));
+	int j2 = int(ceil(ycen+app));
+
+	if (i1 < 0) { i1 = 0; }
+	if (i1 > xmax_chip) { i1 = xmax_chip; }
+	if (j1 < 0) { j1 = 0; }
+	if (j1 > ymax_chip) { i1 = ymax_chip; }
+
+	double chipx = i1-xcen;
+	double peak=0;
+	int cpix=0;;
+	FILE_LOG(logDEBUG1)<<"Boundary x : "<<i1<<","<<i2<<"  y: "<<j1<<","<<j2<<endl;
+
+	for(int i=i1;i<=i2;++i) {
+	  double chipy = j1-ycen;
+	  for(int j=j1;j<=j2;++j) {
+	    double flux = im(i,j)-use_sky[istar];
+	    double inverseVariance=wim(i,j);
+	    double bp=bpm(i,j);
+
+ 	    if(bp>0.0) {
+	      inverseVariance=0;
+	      flux=-999.0;
+	    }
+	    
+	   //  FILE_LOG(logDEBUG2)<<"Values at pixel "<<i<<","<<j<<","<<cpix<<" "
+// 			       <<flux<<" "<<inverseVariance<<" "<<bp<<endl;
+	    pixels[cpix]=flux;
+	    weight[cpix]=inverseVariance;
+ 	    cpix++;
+	  }
+	}
+
+	Detection<T> *det=new Detection<T>(pos[istar].x,pos[istar].y,nvar);
+	for(int j=0;j<nvar;++j) {
+	  det->setVal(j,pixels[j]);
+	}
+	chip->addDet(det);
+      }
+      addChip(ichip,chip);
+    }
+    return true;
+  }
+  
+
+
+
   template<class T>
   std::vector<bool> Exposure<T>::getMissing()
   {
@@ -492,13 +642,13 @@ namespace PCA {
   }
 
 
-  template class Detection<float> ;
+  //template class Detection<float> ;
   template class Detection<double> ;
-  template class Cell<float> ;
+  // template class Cell<float> ;
   template class Cell<double> ;
-  template class Chip<float> ;
+  //template class Chip<float> ;
   template class Chip<double> ;
-  template class Exposure<float> ;
+  //template class Exposure<float> ;
   template class Exposure<double> ;
 
 

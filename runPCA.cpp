@@ -91,6 +91,7 @@ int main(int argc,char*argv[])
   float xmax= params.read<float>("xmax",2048.0);
   float ymax= params.read<float>("ymax",4096.0);
   std::string dir= params.read<std::string>("dir");
+  std::string image_dir= params.read<std::string>("image_dir","");
   int max_exp= params.read<int>("max_exp",-1);
   bool skip61= params.read<bool>("skip61",true);
   std::string outname= params.read<std::string>("outname");
@@ -105,6 +106,9 @@ int main(int argc,char*argv[])
   int fit_order=params.read<int>("fit_order",-1);
   float sigma_clip=params.read<float>("sigma_clip",-1.);
   int logging=params.read<int>("logging",3);
+  int npix=params.read<int>("npix",10);
+  bool shapelet=params.read<bool>("shapelet",true);
+  bool rm_zero=params.read<bool>("rm_zero",true);
 
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
@@ -117,7 +121,19 @@ int main(int argc,char*argv[])
     exp.setChipDivide(nx,ny);
     exp.setChipMax(xmax,ymax);
     if(skip61) exp.addSkip(61);
-    bool suc=exp.readShapelet(dir+name+"/",nvar,use_dash,prefix+name);
+    bool suc;
+    if(shapelet) {
+      suc=exp.readShapelet(dir+name+"/",nvar,use_dash,prefix+name);
+    }
+    else {
+      string fitsname=name;
+      // erase the leading zeros in the exposure number
+      // this is to fix some issues
+      if(rm_zero) fitsname.erase(6,2);
+      nvar=4*(npix+1)*(npix+1);
+      suc=exp.readPixels(image_dir+fitsname+"/",npix,nvar,
+			 dir+name+"/",use_dash,prefix+name);
+    }
     if(suc) exps.push_back(exp);
     if(exps.size()>(max_exp-1) && max_exp>0) break;
   }
