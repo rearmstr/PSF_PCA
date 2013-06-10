@@ -77,13 +77,17 @@ class Cell {
 
 public:
 
-  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax),missing(false) {}
+  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),
+                                                                 bounds(xmin,xmax,ymin,ymax),
+                                                                 clipped(false),missing(false) {}
   Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
   void addDet(Detection<T>* _det) {dets.push_back(_det);}
   int getNDet() {return dets.size();}
   int getNClip();
   int getNGood();
-  bool getMissing() {return missing;}
+  bool isClipped() {return clipped;}
+  void setClipped(bool miss) {clipped=clipped;}
+  bool isMissing() {return missing || getNGood()==0;}
   void setMissing(bool miss) {missing=miss;}
 
   std::vector<T> getVals(std::string type,std::vector<float> &params);
@@ -113,8 +117,8 @@ private:
   int fitorder;
   Bounds<float> bounds;
   std::vector<Detection<T>* > dets;
+  bool clipped;
   bool missing;
-  
 
 };
 

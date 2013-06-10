@@ -286,20 +286,17 @@ namespace PCA {
     std::vector<bool> v(cells.size(),false);
     int cur_index=0;
     for(int i=0;i<cells.size();++i) {
-      if(cells[i]->getNGood()==0) v[i]=true;
+      if(cells[i]->isMissing()) v[i]=true;
     }
     return v;
   }
 
   template<class T>
-  std::vector<bool> Chip<T>::setMissing()
+  void Chip<T>::setMissing(float prob)
   {
-    std::vector<bool> v(cells.size(),false);
-    int cur_index=0;
     for(int i=0;i<cells.size();++i) {
-      if(cells[i]->getNGood()==0) v[i]=true;
+      if(ran01<prob) cells[i]->setMissing(true);
     }
-    return v;
   }
 
   
@@ -622,14 +619,10 @@ namespace PCA {
 
 
   template<class T>
-  std::vector<bool> Exposure<T>::setMissing()
+  voidExposure<T>::setMissing(float prob)
   {
-    int nchip_var=ny_chip*nx_chip;
-    int ncell=chips.size()*ny_chip*nx_chip;
-    std::vector<bool> v(ncell,false);
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
-    int cur_index=0;    
     for(; iter!=chips.end();++iter) {
       
       std::vector<bool> cv=iter->second->setMissing(prob);

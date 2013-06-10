@@ -226,10 +226,11 @@ int main(int argc,char*argv[])
 
   // artificially remove data from each exposure
   if(add_missing>0 && add_missing <1) {
-    
-    
-  
-
+    for(int i=0;i<nexp;++i) {
+      exps[i]->setMissing(add_missing);
+    }
+  }  
+   
   // Build the data matrix
   DMatrix dataM(nexp,nvar);
 
