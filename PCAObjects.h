@@ -77,12 +77,14 @@ class Cell {
 
 public:
 
-  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax) {}
+  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),bounds(xmin,xmax,ymin,ymax),missing(false) {}
   Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
   void addDet(Detection<T>* _det) {dets.push_back(_det);}
   int getNDet() {return dets.size();}
   int getNClip();
   int getNGood();
+  bool getMissing() {return missing;}
+  void setMissing(bool miss) {missing=miss;}
 
   std::vector<T> getVals(std::string type,std::vector<float> &params);
 
@@ -111,6 +113,7 @@ private:
   int fitorder;
   Bounds<float> bounds;
   std::vector<Detection<T>* > dets;
+  bool missing;
   
 
 };
@@ -126,6 +129,7 @@ public:
   void divide(int nvar, int _nx,int _ny); // setup the cell sizes
   std::vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
+  void setMissing(float prob);
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
   Cell<T>* getCell(int i) {return cells[i];}
   Cell<T>* operator[](int i) {return cells[i];}
@@ -171,6 +175,7 @@ public:
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();
+  void setMissing(float prob);
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}
   void setOutlier(bool val) {outlier=val;}

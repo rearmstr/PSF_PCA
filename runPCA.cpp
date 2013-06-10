@@ -6,6 +6,7 @@
 #include "ConfigFile.h"
 #include <cassert>
 #include "Log.h"
+#include "NR.h"
 using namespace std;
 using namespace PCA;
 std::ostream* dbgout = 0;
@@ -13,24 +14,77 @@ bool XDEBUG = false;
 
 template<class T1,class T2>
 void doSVD(T1 &data,int nvar,int nexp,T1 &U,
-           T2 &Svec,T1 &Vt)
+           T2 &Svec,T1 &Vt,bool use_em=true,int npc=20,
+	   int max_iter=1000,double tol=1e-6)
 {
-  if(nexp > nvar) {
-    Vt.resize(nvar,nvar);
-    Svec.resize(nvar);
-    U.resize(nexp,nvar);
-    U=data;
-    SV_Decompose(U,Svec,Vt,true);
-
+  if(!use_em) {
+    if(nexp > nvar) {
+      Vt.resize(nvar,nvar);
+      Svec.resize(nvar);
+      U.resize(nexp,nvar);
+      U=data;
+      SV_Decompose(U,Svec,Vt,true);
+      
+    }
+    else {
+      
+      Vt.resize(nexp,nvar);
+      Svec.resize(nexp);
+      U.resize(nexp,nexp);
+      Vt = data;
+      SV_Decompose(Vt.transpose(),Svec,U.transpose());
+    }
   }
   else {
+    // select a random set of exposures to initialize the solution
+    vector<int> rands;
+    while(rands.size()<npc) {
+      int n=ran01()*nexp;
+      if(find(rands.begin(),rands.end(),n)==rands.end()) {
+	rands.push_back(n);
+      }
+    }
 
-    Vt.resize(nexp,nvar);
-    Svec.resize(nexp);
-    U.resize(nexp,nexp);
-    Vt = data;
+    // assume that we will always have more variables than exposures
+    // and use random data to create initial solution
+    Vt.resize(npc,nvar);
+    Svec.resize(npc);
+    U.resize(npc,npc);
+
+    for(int i=0;i<npc;++i) {
+      Vt.row(i)=data.row(i);
+    }
+    ///FILE_LOG(logINFO)<<"Decomposing "<<endl;
     SV_Decompose(Vt.transpose(),Svec,U.transpose());
+    T1 C(nvar,npc);
+    C=Vt.transpose();
+    T1 x(npc,nexp);
+    for(int i=0;i<rands.size();++i) {
+      x.col(i)=Svec(i)*U.col(i);
+    }
+    
+    
+
+    for(int i=0;i<max_iter;++i) {
+      
+      // using current C calculate x values
+      T1 tmp=C.transpose()*C;
+      //cout<<x.nrows()<<" "<<x.ncols()<<" "<<C.transpose().ncols()<<" "<<data.transpose().nrows()<<endl;
+      x=C.transpose()*data.transpose()/tmp;
+      //FILE_LOG(logINFO)<<"x "<<x<<endl;
+      T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
+      double diff=(Cnew-C).norm();
+      diff/=(Cnew.nrows()*Cnew.ncols());
+      FILE_LOG(logINFO)<<"EM Iteration "<<i<<" diff:"<<diff<<" "<<tol<<endl;
+      if(diff<tol) break;
+
+      C=Cnew;
+    }
+    Svec.setZero();
+    Svec.diag()=(x*x.transpose()).diag();
+    U=(x.transpose()%Svec).subMatrix(0,npc,0,npc);
   }
+  
 }
 
 template<class T>
@@ -109,6 +163,11 @@ int main(int argc,char*argv[])
   int npix=params.read<int>("npix",10);
   bool shapelet=params.read<bool>("shapelet",true);
   bool rm_zero=params.read<bool>("rm_zero",true);
+  bool do_em=params.read<bool>("do_em",true);
+  int max_iter=params.read<int>("max_iter",1000);
+  int em_pc=params.read<int>("em_pc",20);
+  float tol=params.read<float>("tol",1e-6);
+  float add_missing=params.read<float>("add_missing",1e-6);
 
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
@@ -165,6 +224,10 @@ int main(int argc,char*argv[])
     vparams[0]=sigma_clip; 
   }
 
+  // artificially remove data from each exposure
+  if(add_missing>0 && add_missing <1) {
+    
+    
   
 
   // Build the data matrix
@@ -186,7 +249,8 @@ int main(int argc,char*argv[])
   // matrices for svd
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
-  doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp,U,Svec,Vt);
+  
+  doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp,U,Svec,Vt,do_em,em_pc,max_iter,tol);
 
   if(do_exp_rej) {
     // Check for outliers at the exposure level
@@ -234,7 +298,7 @@ int main(int argc,char*argv[])
 
       // Remove mean from variables
       if(subtract_mean) meanRemove<DMatrix>(dataM);
-      doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp_cut,U,Svec,Vt);    
+      doSVD<DMatrix,DDiagMatrix>(dataM,nvar,nexp_cut,U,Svec,Vt,do_em,em_pc,max_iter,tol);    
       }
       outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
