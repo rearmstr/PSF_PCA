@@ -169,6 +169,7 @@ public:
   
   Chip<T>* operator[](int i) {return chips[i];}
   Chip<T>* getChip(int i) {return chips[i];}
+  int getCells() {return nx_chip*ny_chip*chips.size();}
   
   void setShapeStart(int start) {shapeStart=start;}
   void addSkip(int ichip) { skip.push_back(ichip);}
@@ -178,7 +179,7 @@ public:
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
-  std::vector<bool> getMissing();
+  tmv::Vector<bool> getMissing();
   void setMissing(float prob);
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}

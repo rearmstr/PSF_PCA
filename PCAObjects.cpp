@@ -6,6 +6,7 @@
 #include <cassert>
 #include "Log.h"
 #include "Image.h"
+#include "NR.h"
 namespace PCA {
 
   using std::cout;
@@ -295,7 +296,7 @@ namespace PCA {
   void Chip<T>::setMissing(float prob)
   {
     for(int i=0;i<cells.size();++i) {
-      if(ran01<prob) cells[i]->setMissing(true);
+      if(ran01()<prob) cells[i]->setMissing(true);
     }
   }
 
@@ -599,11 +600,11 @@ namespace PCA {
 
 
   template<class T>
-  std::vector<bool> Exposure<T>::getMissing()
+  BVector Exposure<T>::getMissing()
   {
     int nchip_var=ny_chip*nx_chip;
     int ncell=chips.size()*ny_chip*nx_chip;
-    std::vector<bool> v(ncell,false);
+    BVector v(ncell,false);
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
 
     int cur_index=0;    
@@ -619,15 +620,11 @@ namespace PCA {
 
 
   template<class T>
-  voidExposure<T>::setMissing(float prob)
+  void Exposure<T>::setMissing(float prob)
   {
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
-
-    for(; iter!=chips.end();++iter) {
-      
-      std::vector<bool> cv=iter->second->setMissing(prob);
-    }
     
+    for(; iter!=chips.end();++iter) iter->second->setMissing(prob);
   }
 
   template<class T>
