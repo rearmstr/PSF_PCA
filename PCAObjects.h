@@ -77,17 +77,19 @@ class Cell {
 
 public:
 
-  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),
-                                                                 bounds(xmin,xmax,ymin,ymax),
-                                                                 clipped(false),missing(false) {}
-  Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b) {}
+  Cell(int _nvar,float xmin, float xmax,float ymin, float ymax): nvar(_nvar),missing(false),
+								 bounds(xmin,xmax,ymin,ymax),
+								 clipped(false) {missing=false;}
+  Cell(int _nvar,Bounds<float> b): nvar(_nvar),bounds(b),clipped(false),missing(false) {}
   void addDet(Detection<T>* _det) {dets.push_back(_det);}
   int getNDet() {return dets.size();}
   int getNClip();
   int getNGood();
   bool isClipped() {return clipped;}
   void setClipped(bool miss) {clipped=clipped;}
-  bool isMissing() {return missing || getNGood()==0;}
+  //  bool isMissing() {return missing || getNGood()==0;}
+  bool isMissing() {return missing;
+  }
   void setMissing(bool miss) {missing=miss;}
 
   std::vector<T> getVals(std::string type,std::vector<float> &params);
@@ -179,7 +181,7 @@ public:
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
-  tmv::Vector<bool> getMissing();
+  std::vector<bool> getMissing();
   void setMissing(float prob);
   std::string getLabel() {return label;}
   bool isOutlier() {return outlier;}

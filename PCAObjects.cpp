@@ -12,6 +12,7 @@ namespace PCA {
   using std::cout;
   using std::endl;
 
+  // reeturn legendre polynomial of specified order at single point centered on image
   static DVector definePXY(int order, float x, float xmin, float xmax)
   {
     DVector temp(order+1);
@@ -23,7 +24,8 @@ namespace PCA {
     }
     return temp;
   }
-
+  
+  // return matrix of x,y points 
   static void setPRow(int fitorder, Position<float> pos, const Bounds<float>& bounds, DVectorView prow)
   {
     //Assert(int(prow.size()) == (fitorder+1)*(fitorder+2)/2);
@@ -285,7 +287,7 @@ namespace PCA {
   std::vector<bool> Chip<T>::getMissing()
   {
     std::vector<bool> v(cells.size(),false);
-    int cur_index=0;
+
     for(int i=0;i<cells.size();++i) {
       if(cells[i]->isMissing()) v[i]=true;
     }
@@ -600,18 +602,19 @@ namespace PCA {
 
 
   template<class T>
-  BVector Exposure<T>::getMissing()
+  std::vector<bool> Exposure<T>::getMissing()
   {
     int nchip_var=ny_chip*nx_chip;
     int ncell=chips.size()*ny_chip*nx_chip;
-    BVector v(ncell,false);
+    std::vector<bool> v(ncell,false);
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
-
     int cur_index=0;    
     for(; iter!=chips.end();++iter) {
-      
       std::vector<bool> cv=iter->second->getMissing();
-      for(int j=0;j<cv.size();++j) v[cur_index]=cv[j];
+      for(int j=0;j<cv.size();++j) {
+	v[cur_index]=cv[j];
+	cur_index++;
+      }
     }
     
     return v;

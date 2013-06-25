@@ -14,9 +14,10 @@ bool XDEBUG = false;
 
 template<class T1,class T2>
 void doSVD(T1 &data,int nvar,int nexp,T1 &U,
-           T2 &Svec,T1 &Vt,bool use_em=true,int npc=20,
-	   int max_iter=1000,double tol=1e-6,bool do_missing=false,
-	   BMatrix missing=BMatrix(1))
+           T2 &Svec,T1 &Vt,std::vector<std::vector<bool> > &missing,
+	   bool use_em=true,int npc=20,
+	   int max_iter=1000,double tol=1e-6,bool do_missing=false)
+	   //std::vector<std::vector<bool> > missing=(1,std::vector<bool>(1,false)))
 {
   if(!use_em) {
     if(nexp > nvar) {
@@ -37,6 +38,9 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     }
   }
   else {
+
+    assert(npc<=nexp);
+
     // select a random set of exposures to initialize the solution
     vector<int> rands;
     while(rands.size()<npc) {
@@ -55,7 +59,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     for(int i=0;i<npc;++i) {
       Vt.row(i)=data.row(i);
     }
-    ///FILE_LOG(logINFO)<<"Decomposing "<<endl;
+    FILE_LOG(logINFO)<<"Decomposing "<<endl;
     SV_Decompose(Vt.transpose(),Svec,U.transpose());
     T1 C(nvar,npc);
     C=Vt.transpose();
@@ -65,9 +69,9 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     }
     
     
+    for(int iter=0;iter<max_iter;++iter) {
 
-    for(int i=0;i<max_iter;++i) {
-      
+
       if(!do_missing) {
 	// using current C calculate x values
 	T1 tmp=C.transpose()*C;
@@ -77,50 +81,110 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
 	double diff=(Cnew-C).norm();
 	diff/=(Cnew.nrows()*Cnew.ncols());
-	FILE_LOG(logINFO)<<"EM Iteration "<<i<<" diff:"<<diff<<" "<<tol<<endl;
+	FILE_LOG(logDEBUG1)<<"diff "<<diff<<" "<<tol<<endl;
 	if(diff<tol) break;
 	
 	C=Cnew;
+      
       }
-      Svec.setZero();
-      Svec.diag()=(x*x.transpose()).diag();
-      U=(x.transpose()%Svec).subMatrix(0,npc,0,npc);
-      Vt=C.transpose();
-      //  // normalize the rows of U to one
-      //     for(int i=0;i<U.nrows();++i) {
-      //       double norm=U.row(i).normSq();
-      //       Svec(i)*=norm;
-      //       U.row(i)/=norm;
-      //     }
-    }
-    else {
-      
-      int nvar_o=nvar/missing.ncols;
-      // Solve for each variable independently.  Could add openmp here later
-      for(int ivar=0;ivar<nvar;ivar++) {
+      else {
 	
-	int icell=ivar%nvar_o;
-	if(! missing[icell]) {
+	assert(missing.size()>1);
+	int nvar_o=missing[0].size();
+	x.setZero();
+	// Solve for each exposure independently.  Could add openmp here later
+	for(int iexp=0;iexp<nexp;iexp++) {
 	  
-	  T1 tmp=C.transpose()*C;
-	  
-	  x.subMatrix(0,npc,icell,icell+1)=C.transpose()*data.transpose(0,npc).subMatrix/tmp;
-	  
-	  T1 Cnew=data.transpose(
-)*x.transpose()%(x*x.transpose());
-	  double diff=(Cnew-C).norm();
-	  diff/=(Cnew.nrows()*Cnew.ncols());
-	  FILE_LOG(logINFO)<<"EM Iteration "<<i<<" diff:"<<diff<<" "<<tol<<endl;
-	  if(diff<tol) break;
-	  
-	  C=Cnew;
-	  
-	// find out if this variable has data missing
+	  bool cell_miss=false;
+	  // loop over cells to see if any data are missing for this exposure
+	  int nmiss=0;
+	  for(int ivar=0;ivar<nvar;++ivar) {
+	    int icell=ivar%nvar_o;
+	    if (missing[iexp][icell]) {
+	      cell_miss=true;
+	      nmiss++;
+	    }
+	  }
 
+	  FILE_LOG(logDEBUG2)<<"Exposure "<<iexp<<" missing "<<nmiss<<" variables"<<endl;
+
+	  if(!cell_miss) {
+	    
+	    T1 tmp=C.transpose()*C;
+	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*data.transpose().subMatrix(0,nvar,iexp,iexp+1)/tmp;
+	  }
+	  else {
+	    // resshuffle C matrix so that the cells with missing data are in the lowest rows
+	    T1 Cnew(nvar,npc);
+	    int cur_missing=0;
+	    int cur_here=0;
+	    int nhere=nvar-nmiss;
+	    T1 Y(nhere,1); 
+	    T1 Dm(nmiss,1);// missing data
+	    for(int ivar=0;ivar<nvar;++ivar) {
+	      int icell=ivar%nvar_o;
+	      
+	      
+	      if (missing[iexp][icell]) {
+		Cnew.subMatrix(cur_missing,cur_missing+1,0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
+		cur_missing++;
+	      }
+	      else {
+		Cnew.subMatrix(nmiss+cur_here,nmiss+cur_here+1,0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
+		Y(cur_here,0)=data(iexp,ivar);
+		
+		cur_here++;
+	      }
+	    }
+
+	    // solve for x with known data points
+	    x.subMatrix(0,npc,iexp,iexp+1)=Y/Cnew.subMatrix(nmiss,nvar,0,npc);
+	    
+	    // calculate missing points from C and x
+	    Dm=Cnew.subMatrix(0,nmiss,0,npc)*x.subMatrix(0,npc,iexp,iexp+1);
+
+	    // fill in missing points into data matrix
+	    cur_missing=0;
+	    for(int ivar=0;ivar<nvar;++ivar) {
+	      int icell=ivar%nvar_o;
+	      if (missing[iexp][icell]) { 
+		data(iexp,ivar)=Dm(cur_missing,0);
+		cur_missing++;
+	      }
+	    }
+	    
+	  }
+	}
+	
+	
+	T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
+
+	double diff=(Cnew-C).norm();
+	diff/=(Cnew.nrows()*Cnew.ncols());
+	FILE_LOG(logINFO)<<"EM iteration "<<iter<<" diff "<<diff<<" "<<tol<<endl;
+	if(diff<tol) break;
+	C=Cnew;
+      }
+    }
       
-  }
+      
+    Svec.setZero();
+    Svec.diag()=(x*x.transpose()).diag();
+    U=(x.transpose()%Svec).subMatrix(0,npc,0,npc);
+    Vt=C.transpose();
+
+	//  // normalize the rows of U to one
+	//     for(int i=0;i<U.nrows();++i) {
+	//       double norm=U.row(i).normSq();
+	//       Svec(i)*=norm;
+	//       U.row(i)/=norm;
+	//     }
+      
   
+  }
 }
+
+
 
 template<class T>
 int identifyOutliers(T &m,vector<bool> &outliers,float cut)
@@ -202,7 +266,7 @@ int main(int argc,char*argv[])
   int max_iter=params.read<int>("max_iter",1000);
   int em_pc=params.read<int>("em_pc",20);
   float tol=params.read<float>("tol",1e-6);
-  float add_missing=params.read<float>("add_missing",1e-6);
+  float add_missing=params.read<float>("add_missing",-1);
 
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
@@ -272,21 +336,18 @@ int main(int argc,char*argv[])
 
   // Build the data matrix
   DMatrix dataM(nexp,nvar_tot);
-  BMatrix missing(nexp,exps[0].getCells());
+  std::vector<std::vector<bool> > missing(nexp,std::vector<bool>(exps[0].getCells(),false));
   bool hasMissing=false;
-  BVector cellMissing(exps[0].getCells(),false);
   for(int i=0;i<nexp;++i) {
     DVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
-    BVector miss=exps.getMissing();
-    missing.row(i)=miss;
-    for(int i=0;i<miss.size();++i) {
-      hasMissing=miss[i];
-      cellMissing[i]=cellMissing[i] || miss[i];
+    missing[i]=exps[i].getMissing();
+    cout<<"exposure "<<i<<" missing cells"<<endl;
+    for(int j=0;j<missing[i].size();++j) {
+      cout<<missing[i][j]<<" ";
     }
+    cout<<endl;
   }
-
-
 
 
   // output raw data file now before it is altered
@@ -300,8 +361,9 @@ int main(int argc,char*argv[])
   // matrices for svd
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
-  
-  doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,do_em,em_pc,max_iter,tol,hasMissing,cellMissing);
+   hasMissing=true;
+  cout<<"doing svd"<<endl;
+  doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);
 
   if(do_exp_rej) {
     // Check for outliers at the exposure level
@@ -349,7 +411,7 @@ int main(int argc,char*argv[])
 
       // Remove mean from variables
       if(subtract_mean) meanRemove<DMatrix>(dataM);
-      doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,do_em,em_pc,max_iter,tol,hasMissing,cellMissing);    
+      doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);    
       }
       outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
