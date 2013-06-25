@@ -37,7 +37,65 @@ void writeVector(const T & vec,std::string fileName)
   
 }
 
+template<class T>
+ExtHDU* writeMatrixToFits(FITS* file,const T &mat,string name)
+{
+  std::vector<long> ax(2,0);
+  ax[0]=mat.nrows();
+  ax[1]=mat.ncols();
+  int n=mat.nrows()*mat.ncols();
 
-ExtHDU* writeToFits(FITS* file,const DMatrix &mat,string name);
+  std::valarray<double> data(n);
+  std::copy(mat.cptr(),mat.cptr()+n,&data[0]);
+  ExtHDU* ext = file->addImage(name,DOUBLE_IMG,ax);
+  long fpixel(1);
+  ext->write(fpixel,n,data);
+  return ext;
+}
+template< class T>
+ExtHDU* writeVectorToFits(FITS* file,const T &vec,string name)
+{
+  std::vector<long> ax(2,0);
+  ax[0]=vec.size();
+  ax[1]=1;
+  int n=vec.size();
+
+  std::valarray<double> data(n);
+  std::copy(vec.cptr(),vec.cptr()+n,&data[0]);
+  ExtHDU* ext = file->addImage(name,DOUBLE_IMG,ax);
+  long fpixel(1);
+  ext->write(fpixel,n,data);
+  return ext;
+}
+
+template<class T>
+void readMatrixFromFits(FITS* file,string name,T &mat)
+{
+  ExtHDU& e=file->extension(name);
+  e.readAllKeys();
+  int nrows=e.axis(0);
+  int ncols=e.axis(1);
+  mat.resize(nrows,ncols);
+
+  valarray <double > data;
+  e.read(data);
+
+  std::copy(&data[0],&data[0]+nrows*ncols,mat.ptr());
+}
+
+template<class T>
+void readVecFromFits(FITS* file,string name,T &mat)
+{
+  ExtHDU& e=file->extension(name);
+  e.readAllKeys();
+  int nrows=e.axis(0);
+  int ncols=e.axis(1);
+  mat.resize(nrows);
+
+  valarray <double > data;
+  e.read(data);
+
+  std::copy(&data[0],&data[0]+nrows*ncols,mat.ptr());
+}
 
 #endif
