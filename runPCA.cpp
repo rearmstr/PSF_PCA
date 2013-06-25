@@ -112,7 +112,8 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	  if(!cell_miss) {
 	    
 	    T1 tmp=C.transpose()*C;
-	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*data.transpose().subMatrix(0,nvar,iexp,iexp+1)/tmp;
+	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*
+	      data.transpose().subMatrix(0,nvar,iexp,iexp+1)/tmp;
 	  }
 	  else {
 	    // resshuffle C into Cnew so that the cells with missing data are in the lowest rows
@@ -127,11 +128,13 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	      int icell=ivar%nvar_o;
 	      	      
 	      if (missing[iexp][icell]) {
-		Cnew.subMatrix(cur_missing,cur_missing+1,0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
+		Cnew.subMatrix(cur_missing,cur_missing+1,
+			       0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
 		cur_missing++;
 	      }
 	      else {
-		Cnew.subMatrix(nmiss+cur_here,nmiss+cur_here+1,0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
+		Cnew.subMatrix(nmiss+cur_here,nmiss+cur_here+1,
+			       0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
 		Y(cur_here,0)=data(iexp,ivar);
 		
 		cur_here++;
@@ -303,16 +306,8 @@ int main(int argc,char*argv[])
   }
   
   // take the cell boundaries from the first chip of the first exposure
-  std::vector<Bounds<float> > cb=exps[0][1]->getCellBounds();
-  std::ofstream ogrid(grid_file.c_str());
-  
   int nccd=ccd;
   if(skip61 && ccd>61) nccd-=1;
-  for(int j=0;j<nccd;++j) {
-    for(int i=0;i<cb.size();++i) {
-      ogrid<<cb[i].getXMin()<<" "<<cb[i].getYMin()<<" "<<cb[i].getXMax()<<" "<<cb[i].getYMax()<<endl;
-    }
-  }
 
   int nexp=exps.size();
   // scale the number of variables to include the total number per exposure
@@ -343,7 +338,8 @@ int main(int argc,char*argv[])
   // Build the data matrix
   DMatrix dataM(nexp,nvar_tot);
 
-  std::vector<std::vector<bool> > missing(nexp,std::vector<bool>(exps[0].getCells(),false));
+  std::vector<std::vector<bool> > missing(nexp,
+					  std::vector<bool>(exps[0].getCells(),false));
   bool hasMissing=false;
   for(int i=0;i<nexp;++i) {
     DVector med=exps[i].getVals(type,vparams);
@@ -377,7 +373,8 @@ int main(int argc,char*argv[])
   DMatrix U(1,1),Vt(1,1);
   hasMissing=true;
   cout<<"doing svd"<<endl;
-  doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);
+  doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,
+			     do_em,em_pc,max_iter,tol,hasMissing);
 
 
   
@@ -435,7 +432,8 @@ int main(int argc,char*argv[])
 	original_data=dataM;
       }
       
-      doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);    
+      doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,
+				 do_em,em_pc,max_iter,tol,hasMissing);    
       }
       outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
@@ -453,10 +451,24 @@ int main(int argc,char*argv[])
     for(int i=0;i<exp_names.size();++i) {
       oexp<<exp_names[i]<<endl;
     }
+
+    std::vector<Bounds<float> > cb=exps[0][1]->getCellBounds();
+    std::ofstream ogrid(grid_file.c_str());
+  
     
+    for(int j=0;j<nccd;++j) {
+      for(int i=0;i<cb.size();++i) {
+	ogrid<<cb[i].getXMin()<<" "<<cb[i].getYMin()<<" "
+	     <<cb[i].getXMax()<<" "<<cb[i].getYMax()<<endl;
+      }
+    }
   }
   else {
+
+   
     
+
+    // write the exposure information
     int nwvar=1;
     int nrows=exp_names.size();
     std::vector<string> colName(nwvar,"");
@@ -467,7 +479,61 @@ int main(int argc,char*argv[])
     colUnit[0] = "";
     Table* newTable = fitfile->addTable("exps",nrows,colName,colForm,colUnit);
     newTable->column(colName[0]).write(exp_names,1);
+ // write the header information
+    newTable->addKey("ccd",ccd,"number of ccds");
+    newTable->addKey("nvar",nvar,"number of variabls");
+    newTable->addKey("nx",nx,"cells in x direction");
+    newTable->addKey("ny",ny,"cells in y direction");
+    newTable->addKey("xmax",xmax,"maximum ccd x");
+    newTable->addKey("ymax",ymax,"maximum ccd y");
+    newTable->addKey("rm_mean",subtract_mean,"remove mean");
+    newTable->addKey("type",type,"cell estimation");
+    newTable->addKey("exp_cut",exp_cut,"exposure cut");
+    newTable->addKey("order",fit_order,"fit order within cell");
+    newTable->addKey("clip",sigma_clip,"sigma clip within cell");
+    if(do_em) {
+      newTable->addKey("em_pc",em_pc,"EM PCs");
+      newTable->addKey("em_tol",tol,"EM tolerance");
+      newTable->addKey("em_iter",max_iter,"EM maximum iterations");
+    }
+    
 
+
+    // write the grid information
+    vector<double> lx,ux,ly,uy;
+    std::vector<Bounds<float> > cb=exps[0][1]->getCellBounds();
+    for(int i=0;i<cb.size();++i) {
+      lx.push_back(cb[i].getXMin());
+      ly.push_back(cb[i].getYMin());
+      ux.push_back(cb[i].getXMax());
+      uy.push_back(cb[i].getYMax());
+    }
+    
+    nwvar=4;
+    nrows=cb.size();
+    colName.resize(nwvar);
+    colForm.resize(nwvar);
+    colUnit.resize(nwvar);
+
+    colName[0] = "lower_x";
+    colName[1] = "lower_y";
+    colName[2] = "upper_x";
+    colName[3] = "upper_y";
+    colForm[0] = "1E";
+    colForm[1] = "1E";
+    colForm[2] = "1E";
+    colForm[3] = "1E";
+    colUnit[0] = "pixels";
+    colUnit[1] = "pixels";
+    colUnit[2] = "pixels";
+    colUnit[3] = "pixels";
+    Table* newTable2 = fitfile->addTable("grid",nrows,colName,colForm,colUnit);
+    newTable2->column(colName[0]).write(lx,1);
+    newTable2->column(colName[1]).write(ly,1);
+    newTable2->column(colName[2]).write(ux,1);
+    newTable2->column(colName[3]).write(uy,1);
+
+    // write the matrices
     if(subtract_mean) {
       writeMatrixToFits<DMatrix>(fitfile,original_data,"data");
       writeMatrixToFits<DMatrix>(fitfile,dataM,"data_mr");
