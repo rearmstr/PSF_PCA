@@ -343,7 +343,7 @@ int main(int argc,char*argv[])
     DVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
     missing[i]=exps[i].getMissing();
-    FILE_LOG(logDEBUG)<<<<"exposure "<<i<<" missing cells"<<endl;
+    FILE_LOG(logDEBUG)<<"exposure "<<i<<" missing cells"<<endl;
     for(int j=0;j<missing[i].size();++j) {
        FILE_LOG(logDEBUG)<<missing[i][j]<<" ";
     }
@@ -362,7 +362,7 @@ int main(int argc,char*argv[])
   // matrices for svd
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
-   hasMissing=true;
+  hasMissing=true;
   cout<<"doing svd"<<endl;
   doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);
 
