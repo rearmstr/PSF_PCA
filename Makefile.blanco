@@ -50,7 +50,7 @@ getCoeff: getCoeff.o $(OBJtmv)
 test_svd.o: test_svd.cc 
 	$(GCC) $(CXXFLAGS) -c -o $@ test_svd.cc $(INCLUDE)
 test_svd: test_svd.o Image.o PCAObjects.o
-	$(GCC) $(CXXFLAGS) -o test_svd test_svd.o Image.o PCAObjects.o $(LIBS)
+	$(GCC) $(CXXFLAGS) -o test_svd myIO.o test_svd.o  $(OBJtmv) $(LIBS)
 
 #test_svd.o: test_svd.cc myClass.h
 #	$(GCC) $(CXXFLAGS) -c -o $@ test_svd.cc $(INCLUDE)
