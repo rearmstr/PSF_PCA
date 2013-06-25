@@ -15,9 +15,9 @@ bool XDEBUG = false;
 template<class T1,class T2>
 void doSVD(T1 &data,int nvar,int nexp,T1 &U,
            T2 &Svec,T1 &Vt,std::vector<std::vector<bool> > &missing,
-	   bool use_em=true,int npc=20,
+	   bool use_em=false,int npc=20,
 	   int max_iter=1000,double tol=1e-6,bool do_missing=false)
-	   //std::vector<std::vector<bool> > missing=(1,std::vector<bool>(1,false)))
+  
 {
   if(!use_em) {
     if(nexp > nvar) {
@@ -51,15 +51,17 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     }
 
     // assume that we will always have more variables than exposures
-    // and use random data to create initial solution
+    assert(nexp<nvar);
     Vt.resize(npc,nvar);
     Svec.resize(npc);
     U.resize(npc,npc);
 
+    // use a random subset of data equal to the number of pcs to
+    // give an initial solution via svd
     for(int i=0;i<npc;++i) {
       Vt.row(i)=data.row(i);
     }
-    FILE_LOG(logINFO)<<"Decomposing "<<endl;
+    FILE_LOG(logINFO)<<"Initial Decomposition "<<endl;
     SV_Decompose(Vt.transpose(),Svec,U.transpose());
     T1 C(nvar,npc);
     C=Vt.transpose();
@@ -71,11 +73,9 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     
     for(int iter=0;iter<max_iter;++iter) {
 
-
+      // for no missing data can solve
       if(!do_missing) {
-	// using current C calculate x values
 	T1 tmp=C.transpose()*C;
-	
 	x=C.transpose()*data.transpose()/tmp;
 	
 	T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
@@ -100,6 +100,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	  int nmiss=0;
 	  for(int ivar=0;ivar<nvar;++ivar) {
 	    int icell=ivar%nvar_o;
+
 	    if (missing[iexp][icell]) {
 	      cell_miss=true;
 	      nmiss++;
@@ -114,17 +115,17 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*data.transpose().subMatrix(0,nvar,iexp,iexp+1)/tmp;
 	  }
 	  else {
-	    // resshuffle C matrix so that the cells with missing data are in the lowest rows
+	    // resshuffle C into Cnew so that the cells with missing data are in the lowest rows
+	    // and cells with data are in the highest rows
 	    T1 Cnew(nvar,npc);
 	    int cur_missing=0;
 	    int cur_here=0;
 	    int nhere=nvar-nmiss;
-	    T1 Y(nhere,1); 
+	    T1 Y(nhere,1); // actual data values
 	    T1 Dm(nmiss,1);// missing data
 	    for(int ivar=0;ivar<nvar;++ivar) {
 	      int icell=ivar%nvar_o;
-	      
-	      
+	      	      
 	      if (missing[iexp][icell]) {
 		Cnew.subMatrix(cur_missing,cur_missing+1,0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
 		cur_missing++;
@@ -342,11 +343,11 @@ int main(int argc,char*argv[])
     DVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
     missing[i]=exps[i].getMissing();
-    cout<<"exposure "<<i<<" missing cells"<<endl;
+    FILE_LOG(logDEBUG)<<<<"exposure "<<i<<" missing cells"<<endl;
     for(int j=0;j<missing[i].size();++j) {
-      cout<<missing[i][j]<<" ";
+       FILE_LOG(logDEBUG)<<missing[i][j]<<" ";
     }
-    cout<<endl;
+    FILE_LOG(logDEBUG)<<endl;
   }
 
 
