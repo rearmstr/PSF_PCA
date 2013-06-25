@@ -268,15 +268,20 @@ int main(int argc,char*argv[])
   int em_pc=params.read<int>("em_pc",20);
   float tol=params.read<float>("tol",1e-6);
   float add_missing=params.read<float>("add_missing",-1);
+  bool write_fits=params.read<bool>("write_fits",true);
+  string read_fits=params.read<string>("read_fits","");
 
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
 
   ifstream file(filename.c_str());  
   string name;
+
+  vector<string> exp_names;
   while(file>>name) {
     
     Exposure<double> exp(name,ccd);
+    exp_names.push_back(name);
     exp.setChipDivide(nx,ny);
     exp.setChipMax(xmax,ymax);
     if(skip61) exp.addSkip(61);
@@ -337,6 +342,7 @@ int main(int argc,char*argv[])
 
   // Build the data matrix
   DMatrix dataM(nexp,nvar_tot);
+
   std::vector<std::vector<bool> > missing(nexp,std::vector<bool>(exps[0].getCells(),false));
   bool hasMissing=false;
   for(int i=0;i<nexp;++i) {
@@ -350,9 +356,16 @@ int main(int argc,char*argv[])
     FILE_LOG(logDEBUG)<<endl;
   }
 
+  // keep this around to write out full data matrix
+  DMatrix original_data(nexp,nvar_tot);
+  if(subtract_mean) original_data=dataM;
 
-  // output raw data file now before it is altered
-  writeMatrix(dataM,outname+"_data");
+  FITS *fitfile=0;
+  if(write_fits) {
+    long naxis    =   2;      
+    long naxes1[2] = { 1, 1 }; 
+    fitfile=new FITS("!"+outname+".fits",USHORT_IMG , naxis , naxes1 );
+  }
   
   // Remove mean from the data
   // probably can bemore efficient by using tmv operations
@@ -365,6 +378,9 @@ int main(int argc,char*argv[])
   hasMissing=true;
   cout<<"doing svd"<<endl;
   doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);
+
+
+  
 
   if(do_exp_rej) {
     // Check for outliers at the exposure level
@@ -381,6 +397,8 @@ int main(int argc,char*argv[])
       int iexp=0;
       FILE_LOG(logINFO)<<"Found "<<noutlier<<" outliers"<<endl;
 
+      exp_names.clear();
+
       for(int i=0;i<nexp;++i) {
         if(exps[i].isOutlier()) continue;
         
@@ -388,6 +406,7 @@ int main(int argc,char*argv[])
           FILE_LOG(logINFO)<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
           exps[i].setOutlier(1);
         }
+	exp_names.push_back(exps[i].getLabel());
         iexp++;
       }
       FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected "<<endl;
@@ -406,27 +425,62 @@ int main(int argc,char*argv[])
         cur_exp++;
       }
 
-      // do I really want to write/overwrite at each stage of the rejection
-      // iteration?  Other option is to keep dataM and not modify it
-      writeMatrix(dataM,outname+"_data");
 
       // Remove mean from variables
-      if(subtract_mean) meanRemove<DMatrix>(dataM);
+      if(subtract_mean) {
+	meanRemove<DMatrix>(dataM);
+
+	//  keep original
+	original_data.resize(nexp_cut,nvar_tot);
+	original_data=dataM;
+      }
+      
       doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,do_em,em_pc,max_iter,tol,hasMissing);    
       }
       outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
   }
 
-  std::ofstream oexp((outname+"_exp").c_str());           
-  for(int i=0;i<nexp;++i) {
-    if(exps[i].isOutlier()) continue;
-    oexp<<exps[i].getLabel()<<endl;
-  }
+ 
+
+  if(!write_fits) {
+    writeMatrix(dataM,outname+"_data");
+    writeMatrix(Vt,outname+"_vec");
+    writeMatrix(U,outname+"_coeff");
+    writeVector(Svec.diag(),outname+"_singular");
+    std::ofstream oexp((outname+"_exp").c_str());           
+   
+    for(int i=0;i<exp_names.size();++i) {
+      oexp<<exp_names[i]<<endl;
+    }
     
-  writeMatrix(Vt,outname+"_vec");
-  writeMatrix(U,outname+"_coeff");
-  writeVector(Svec.diag(),outname+"_singular");
+  }
+  else {
+    
+    int nwvar=1;
+    int nrows=exp_names.size();
+    std::vector<string> colName(nwvar,"");
+    std::vector<string> colForm(nwvar,"");
+    std::vector<string> colUnit(nwvar,"");
+    colName[0] = "exposure";
+    colForm[0] = "16A";
+    colUnit[0] = "";
+    Table* newTable = fitfile->addTable("exps",nrows,colName,colForm,colUnit);
+    newTable->column(colName[0]).write(exp_names,1);
+
+    if(subtract_mean) {
+      writeMatrixToFits<DMatrix>(fitfile,original_data,"data");
+      writeMatrixToFits<DMatrix>(fitfile,dataM,"data_mr");
+    }
+    else {
+      writeMatrixToFits<DMatrix>(fitfile,dataM,"data");
+    }
+    writeMatrixToFits<DMatrix>(fitfile,Vt,"vec");
+    writeMatrixToFits<DMatrix>(fitfile,U,"coeff");
+    writeVectorToFits<DVector>(fitfile,Svec.diag(),"singular");
+        
+  }
   
+ 
 }
 
