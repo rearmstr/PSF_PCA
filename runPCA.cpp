@@ -171,20 +171,31 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
       }
     }
       
-      
+       
+    U.resize(nexp,npc);
     Svec.setZero();
-    Svec.diag()=(x*x.transpose()).diag();
-    U=(x.transpose()%Svec).subMatrix(0,npc,0,npc);
-    Vt=C.transpose();
 
-	//  // normalize the rows of U to one
-	//     for(int i=0;i<U.nrows();++i) {
-	//       double norm=U.row(i).normSq();
-	//       Svec(i)*=norm;
-	//       U.row(i)/=norm;
-	//     }
+    Svec.diag()=(C.transpose()*C).diag();
+    for(int i=0;i<npc;++i) Svec(i)=std::sqrt(Svec(i));
+    Vt=C.transpose()/Svec;
+    U=x.transpose();
+
+    //normalize the cols of U to one and scale the Svec
+    for(int i=0;i<U.ncols();++i) {
+      double norm=U.col(i).normSq();
+      Svec(i)*=std::sqrt(norm);
+      U.col(i)/=std::sqrt(norm);
+    }
+
+    
+    // reorder matrices in terms of largest eigen value
+    tmv::Permutation p;
+    DVector diag=Svec.diag();
+    diag.sort(p,tmv::Descend);
+    Svec.diag()=p*Svec.diag();
+    Vt=p*Vt;
+    U=U*p;
       
-  
   }
 }
 
@@ -197,12 +208,15 @@ int identifyOutliers(T &m,vector<bool> &outliers,float cut)
   outliers.resize(m.nrows());
   for(int iexp=0;iexp<m.nrows();++iexp) {
     
-    int sum=0;
+    double sum=0;
     outliers[iexp]=false;
     for(int ipca=0;ipca<m.ncols();++ipca) {
-      double var=m(iexp,ipca)*m(iexp,ipca);
-      sum+=var;
+      sum+=m(iexp,ipca)*m(iexp,ipca);
+    }
 
+    for(int ipca=0;ipca<m.ncols();++ipca) {
+      double var=m(iexp,ipca)*m(iexp,ipca)/sum;
+      
       if(var>cut)  {
         cout<<" Found outlier with % contribution: "<<var<<endl;
         outliers[iexp]=true;
@@ -378,7 +392,6 @@ int main(int argc,char*argv[])
 
 
   
-
   if(do_exp_rej) {
     // Check for outliers at the exposure level
     // if a single pca contributes more than exp_cut to the total
@@ -389,6 +402,7 @@ int main(int argc,char*argv[])
       FILE_LOG(logINFO)<<"\nOutlier rejection iter "<<outlier_iter<<endl;
       //FILE_LOG(logINFO)<<"Exposures remaining: "<<U.nrows()<<endl;
       vector<bool> outliers;
+
       noutlier=identifyOutliers<DMatrix>(U,outliers,exp_cut);
       int nexp_cur=U.nrows();
       int iexp=0;
@@ -397,7 +411,7 @@ int main(int argc,char*argv[])
       exp_names.clear();
 
       for(int i=0;i<nexp;++i) {
-        if(exps[i].isOutlier()) continue;
+	if(exps[i].isOutlier()) continue;
         
         if(outliers[iexp]) {
           FILE_LOG(logINFO)<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
@@ -493,7 +507,7 @@ int main(int argc,char*argv[])
     newTable->addKey("clip",sigma_clip,"sigma clip within cell");
     if(do_em) {
       newTable->addKey("em_pc",em_pc,"EM PCs");
-      newTable->addKey("em_tol",tol,"EM tolerance");
+      newTable->addKey("em_tol",tol,"EM tol erance");
       newTable->addKey("em_iter",max_iter,"EM maximum iterations");
     }
     
