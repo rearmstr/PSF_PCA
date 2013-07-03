@@ -279,7 +279,6 @@ int main(int argc,char*argv[])
   int max_exp= params.read<int>("max_exp",-1);
   bool skip61= params.read<bool>("skip61",true);
   std::string outname= params.read<std::string>("outname");
-  std::string grid_file= params.read<std::string>("grid_file");
   bool subtract_mean=params.read<bool>("subtract_mean",true);
   std::string type=params.read<std::string>("type","mean");
   float exp_cut= params.read<float>("exp_cut",0.15);
@@ -541,7 +540,7 @@ int main(int argc,char*argv[])
     }
 
     std::vector<Bounds<float> > cb=exps[0][1]->getCellBounds();
-    std::ofstream ogrid(grid_file.c_str());
+    std::ofstream ogrid((outname+"_grid").c_str());
   
     
     for(int j=0;j<nccd;++j) {
