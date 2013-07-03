@@ -12,8 +12,9 @@ using namespace PCA;
 std::ostream* dbgout = 0;
 bool XDEBUG = false;
 
+// principal component decomposition, can do svd or em
 template<class T1,class T2>
-void doSVD(T1 &data,int nvar,int nexp,T1 &U,
+void doPCD(T1 &data,int nvar,int nexp,T1 &U,
            T2 &Svec,T1 &Vt,std::vector<std::vector<bool> > &missing,
 	   bool use_em=false,int npc=20,
 	   int max_iter=1000,double tol=1e-6,bool do_missing=false)
@@ -34,7 +35,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
       Svec.resize(nexp);
       U.resize(nexp,nexp);
       Vt = data;
-      SV_Decompose(Vt.transpose(),Svec,U.transpose());
+      SV_Decompose(Vt.transpose(),Svec,U.transpose(),true);
     }
   }
   else {
@@ -75,6 +76,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 
       // for no missing data can solve
       if(!do_missing) {
+	FILE_LOG(logDEBUG)<<"Doing EM for all exposures "<<endl;
 	T1 tmp=C.transpose()*C;
 	x=C.transpose()*data.transpose()/tmp;
 	
@@ -83,7 +85,8 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	diff/=(Cnew.nrows()*Cnew.ncols());
 	FILE_LOG(logDEBUG1)<<"diff "<<diff<<" "<<tol<<endl;
 	if(diff<tol) break;
-	
+	FILE_LOG(logINFO)<<"EM iteration "<<iter<<" diff "
+			 <<diff<<" "<<tol<<endl;
 	C=Cnew;
       
       }
@@ -94,7 +97,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	x.setZero();
 	// Solve for each exposure independently.  Could add openmp here later
 	for(int iexp=0;iexp<nexp;iexp++) {
-	  
+
 	  bool cell_miss=false;
 	  // loop over cells to see if any data are missing for this exposure
 	  int nmiss=0;
@@ -106,8 +109,10 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 	      nmiss++;
 	    }
 	  }
-
-	  FILE_LOG(logDEBUG2)<<"Exposure "<<iexp<<" missing "<<nmiss<<" variables"<<endl;
+	  if(iter==0) {
+	    FILE_LOG(logDEBUG)<<"Exposure "<<iexp<<" missing "
+			      <<nmiss<<" variables"<<endl;
+	  }
 
 	  if(!cell_miss) {
 	    
@@ -180,7 +185,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     Vt=C.transpose()/Svec;
     U=x.transpose();
 
-    //normalize the cols of U to one and scale the Svec
+    //normalize the cols of U to one and scale Svec accordingly
     for(int i=0;i<U.ncols();++i) {
       double norm=U.col(i).normSq();
       Svec(i)*=std::sqrt(norm);
@@ -188,7 +193,7 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
     }
 
     
-    // reorder matrices in terms of largest eigen value
+    // reorder matrices in terms of largest eigenvalue
     tmv::Permutation p;
     DVector diag=Svec.diag();
     diag.sort(p,tmv::Descend);
@@ -200,7 +205,10 @@ void doSVD(T1 &data,int nvar,int nexp,T1 &U,
 }
 
 
-
+// identify outliers where they are found by examining the
+// components of a single exposure.  If any of the components
+// are above cut label the exposure as bad.  It does not
+// assume the vectors of an exposure are orthogonal
 template<class T>
 int identifyOutliers(T &m,vector<bool> &outliers,float cut)
 {
@@ -228,14 +236,19 @@ int identifyOutliers(T &m,vector<bool> &outliers,float cut)
   return noutlier;
 }
 
+
+// remove the mean of each column
 template<class T>
-void meanRemove(T &m)
+DVector meanRemove(T &m)
 {
+  DVector mean(m.ncols());
   for(int i=0;i<m.ncols();++i) {
 
     double sum=m.col(i).sumElements();
     m.col(i).addToAll(-sum/m.nrows());
+    mean(i)=sum/m.nrows();
   }
+  return mean;
 }
 
 
@@ -274,6 +287,7 @@ int main(int argc,char*argv[])
   std::string prefix=params.read<std::string>("prefix","");
   int max_outlier_iter=params.read<int>("max_outlier_iter",100);
   bool do_exp_rej=params.read<bool>("do_exp_rej",true);
+  bool do_obj_rej=params.read<bool>("do_obj_rej",false);
   int fit_order=params.read<int>("fit_order",-1);
   float sigma_clip=params.read<float>("sigma_clip",-1.);
   int logging=params.read<int>("logging",3);
@@ -304,7 +318,7 @@ int main(int argc,char*argv[])
     if(skip61) exp.addSkip(61);
     bool suc;
     if(shapelet) {
-      suc=exp.readShapelet(dir+name+"/",nvar,use_dash,prefix+name);
+      suc=exp.readShapelet(dir+name+"/",nvar,do_em,use_dash,prefix+name);
     }
     else {
       string fitsname=name;
@@ -359,11 +373,13 @@ int main(int argc,char*argv[])
     DVector med=exps[i].getVals(type,vparams);
     dataM.row(i)=med;
     missing[i]=exps[i].getMissing();
-    FILE_LOG(logDEBUG)<<"exposure "<<i<<" missing cells"<<endl;
+    //FILE_LOG(logDEBUG)<<"exposure "<<i<<" missing cells"<<endl;
+    
     for(int j=0;j<missing[i].size();++j) {
-       FILE_LOG(logDEBUG)<<missing[i][j]<<" ";
+      //cout<<missing[i][j]<<" ";
+       if(missing[i][j])hasMissing=true;
     }
-    FILE_LOG(logDEBUG)<<endl;
+    //cout<<endl;
   }
 
   // keep this around to write out full data matrix
@@ -379,19 +395,21 @@ int main(int argc,char*argv[])
   
   // Remove mean from the data
   // probably can bemore efficient by using tmv operations
-  if(subtract_mean) meanRemove(dataM);
+  DVector mean(dataM.ncols());
+  if(subtract_mean) mean=meanRemove(dataM);
 
   
   // matrices for svd
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
-  hasMissing=true;
-  cout<<"doing svd"<<endl;
-  doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,
+  
+  doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp,U,Svec,Vt,missing,
 			     do_em,em_pc,max_iter,tol,hasMissing);
 
 
   
+  // identify outliers using the scores of the pcs.  Iterate until
+  // no more exposures are removed
   if(do_exp_rej) {
     // Check for outliers at the exposure level
     // if a single pca contributes more than exp_cut to the total
@@ -422,38 +440,95 @@ int main(int argc,char*argv[])
       }
       FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected "<<endl;
       if(noutlier>0) {
-      int nexp_cut=nexp_cur-noutlier;
-      FILE_LOG(logDEBUG)<<"Reducing size to "<<nexp_cut<<endl;
-      dataM.setZero();
-      dataM.resize(nexp_cut,nvar_tot);
-      
-      int cur_exp=0;
-      for(int i=0;i<nexp;++i) {
-        if(exps[i].isOutlier()) continue;
-
-        DVector med=exps[i].getVals(type,vparams);
-        dataM.row(cur_exp)=med;
-        cur_exp++;
+	int nexp_cut=nexp_cur-noutlier;
+	FILE_LOG(logDEBUG)<<"Reducing size to "<<nexp_cut<<endl;
+	dataM.setZero();
+	dataM.resize(nexp_cut,nvar_tot);
+	missing.resize(nexp_cut);
+	int cur_exp=0;
+	
+	hasMissing=false;
+	for(int i=0;i<nexp;++i) {
+	  if(exps[i].isOutlier()) continue;
+	  
+	  DVector med=exps[i].getVals(type,vparams);
+	  missing[i]=exps[i].getMissing();
+	  for(int j=0;j<missing[i].size();++j) {
+	    if(missing[i][j])hasMissing=true;
+	  }
+	  dataM.row(cur_exp)=med;
+	  cur_exp++;
+	  
+	}
+	
+	
+	// Remove mean from variables
+	if(subtract_mean) {
+	  
+	  //  keep original
+	  original_data.resize(nexp_cut,nvar_tot);
+	  original_data=dataM;
+	  mean.resize(dataM.ncols());
+	  mean=meanRemove<DMatrix>(dataM);
+	}
+	
+	doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,
+				   do_em,em_pc,max_iter,tol,hasMissing);    
+	
+	outlier_iter++;
       }
-
-
-      // Remove mean from variables
-      if(subtract_mean) {
-	meanRemove<DMatrix>(dataM);
-
-	//  keep original
-	original_data.resize(nexp_cut,nvar_tot);
-	original_data=dataM;
-      }
-      
-      doSVD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nexp_cut,U,Svec,Vt,missing,
-				 do_em,em_pc,max_iter,tol,hasMissing);    
-      }
-      outlier_iter++;
     } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
   }
+  
+  
+  if(do_obj_rej) {
 
- 
+    
+    DMatrix dataR=U*Svec*Vt;
+    if(subtract_mean) {
+      for(int i=0;i<dataR.ncols();i++) dataR.col(i).addToAll(mean(i));
+    }
+    
+    
+    for(int i=0;i<nexp;++i) {
+      if(exps[i].isOutlier()) continue;
+      DVector data_exp=dataR.row(i);
+      double obj_sigma_clip=3;
+
+      exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
+    }
+
+    bool hasMissing=false;
+    int cur_exp=0;
+    for(int i=0;i<nexp;++i) {
+      if(exps[i].isOutlier()) continue;
+      
+      DVector med=exps[i].getVals(type,vparams);
+      dataM.row(cur_exp)=med;
+      missing[i]=exps[i].getMissing();
+      for(int j=0;j<missing[i].size();++j) {
+	if(missing[i][j])hasMissing=true;
+      }
+      cur_exp++;
+    }
+      
+    
+    // Remove mean from variables
+    if(subtract_mean) {
+      original_data.resize(cur_exp,nvar_tot);
+      original_data=dataM;
+      mean.resize(dataM.ncols());
+      mean=meanRemove<DMatrix>(dataM);
+
+    }
+    cout<<"XXYY"<<std::endl;
+    cout<<dataM<<endl;
+    doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,cur_exp,U,Svec,Vt,missing,
+			       do_em,em_pc,max_iter,tol,hasMissing); 
+   
+  }
+  
+
 
   if(!write_fits) {
     writeMatrix(dataM,outname+"_data");

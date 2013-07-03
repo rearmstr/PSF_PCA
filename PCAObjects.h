@@ -87,14 +87,17 @@ public:
   int getNGood();
   bool isClipped() {return clipped;}
   void setClipped(bool miss) {clipped=clipped;}
-  //  bool isMissing() {return missing || getNGood()==0;}
-  bool isMissing() {return missing;
-  }
+  bool isMissing() {return missing || getNGood()==0;}
+
   void setMissing(bool miss) {missing=miss;}
 
   std::vector<T> getVals(std::string type,std::vector<float> &params);
 
   std::vector<T> getMeanVals();
+  std::vector<T> getDiff(tmv::Vector<T> vals,std::string type,
+			 std::vector<float> params,bool clip=false,
+			 double mean=-1,double sigma=-1,
+			 double nclip=-1);
   std::vector<T> getMeanClipVals(float clip);
   std::vector<T> getMedianVals();
   std::vector<T> getFitVals(int order=1);
@@ -138,10 +141,12 @@ public:
   void setMissing(float prob);
   std::vector<Bounds<float> > getCellBounds() {return cbounds;}
   Cell<T>* getCell(int i) {return cells[i];}
+  int getNCell() {return cells.size();}
   Cell<T>* operator[](int i) {return cells[i];}
   int getNClip();
   int getNGood();
   int getNDet();
+  //int getNVal(std::string type,std::vector<float> params);
 
 private:
   int label;
@@ -172,12 +177,13 @@ public:
   Chip<T>* operator[](int i) {return chips[i];}
   Chip<T>* getChip(int i) {return chips[i];}
   int getCells() {return nx_chip*ny_chip*chips.size();}
+  //int getNVal(std::string type,std::vector<float> params);
   
   void setShapeStart(int start) {shapeStart=start;}
   void addSkip(int ichip) { skip.push_back(ichip);}
   void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
-  bool readShapelet(std::string dir,int nvar,bool use_dash=false,std::string exposure="");
+  bool readShapelet(std::string dir,int nvar,bool include_miss=false,bool use_dash=false,std::string exposure="");
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
@@ -189,6 +195,7 @@ public:
   int getNClip();
   int getNGood();
   int getNDet();
+  void outlierReject(const tmv::Vector<T> &data_r,double sigma,std::string type,std::vector<float> param);
 
 private:
   float xmax_chip;
