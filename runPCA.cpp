@@ -482,8 +482,8 @@ int main(int argc,char*argv[])
   
   
   if(do_obj_rej) {
-
     
+    FILE_LOG(logINFO)<<"Doing star rejection on each exposure"<<endl;
     DMatrix dataR=U*Svec*Vt;
     if(subtract_mean) {
       for(int i=0;i<dataR.ncols();i++) dataR.col(i).addToAll(mean(i));
@@ -521,8 +521,7 @@ int main(int argc,char*argv[])
       mean=meanRemove<DMatrix>(dataM);
 
     }
-    cout<<"XXYY"<<std::endl;
-    cout<<dataM<<endl;
+    FILE_LOG(logINFO)<<"Redoing Decomposition"<<endl;
     doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,cur_exp,U,Svec,Vt,missing,
 			       do_em,em_pc,max_iter,tol,hasMissing); 
    

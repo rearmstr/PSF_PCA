@@ -626,11 +626,18 @@ namespace PCA {
         
       }
       catch (CCfits::FitsException& ) {
-        FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()<<" from exposure "<<exp<<" skipping"<<endl;
+
 	
-        if(!include_miss) return false;
+        if(!include_miss) {
+	  FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()
+			    <<" from exposure "<<exp<<" skipping"<<endl;
+	  return false;
+	}
+	else {
+	  FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()
+			    <<" from exposure "<<exp<<" will be set to missing"<<endl;
+	}
       }
-      
       addChip(ichip,chip);
       
     }
