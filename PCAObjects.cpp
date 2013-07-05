@@ -203,8 +203,8 @@ namespace PCA {
 			     << std::abs(tmp[cur]-median)
 			     <<" max allowed:"<<clip*mad<<endl;
           nclip++;
-	  cur++;
         }
+	cur++;
       }
     }
     FILE_LOG(logDEBUG1)<<"   Clipped "<<nclip<<" detections"<<endl;
