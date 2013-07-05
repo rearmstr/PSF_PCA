@@ -163,10 +163,11 @@ namespace PCA {
 			  <<"three detections. "
 			  <<"It is now missing"<<endl;
       
-      this->setMissing(true);
-      return v;
+       this->setMissing(true);
+       return v;
     }
-      
+    
+
     for(int j=0;j<nvar;++j) v[j]=0;
     //iterate once through the variables to label outliers in any 
     // of the variables using the the median absolute deviation
@@ -174,11 +175,16 @@ namespace PCA {
     for(int j=0;j<nvar;++j) {
 
       FILE_LOG(logDEBUG1)<<"   Getting variable: "<<j<<endl;
-      std::vector<T> tmp;     
+      std::vector<T> tmp(this->getNGood());     
       
+      int cur=0;
       for(int i=0;i<dets.size();++i) {
+	
 	if(dets[i]->isClipped()) continue;
-        tmp.push_back(dets[i]->getVal(j));
+
+        //tmp.push_back(dets[i]->getVal(j));
+	tmp[cur]=(dets[i]->getVal(j));
+	cur++;
       }
       double mad;
       double median=median_mad(tmp,mad);
@@ -186,7 +192,7 @@ namespace PCA {
 			 <<" objects with median: "<<median
 			 <<" mad: "<<mad<<endl;
 
-      int cur=0;
+      cur=0;
       for(int i=0;i<dets.size();++i) {
 	if(dets[i]->isClipped()) continue;
 	

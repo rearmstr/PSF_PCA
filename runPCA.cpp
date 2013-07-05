@@ -213,6 +213,7 @@ template<class T>
 int identifyOutliers(T &m,vector<bool> &outliers,float cut)
 {
   int noutlier=0;
+  outliers.clear();
   outliers.resize(m.nrows());
   for(int iexp=0;iexp<m.nrows();++iexp) {
     
@@ -436,13 +437,19 @@ int main(int argc,char*argv[])
         iexp++;
       }
 
-      FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected "<<endl;
+      FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected at this iteration "<<endl;
       if(noutlier>0) {
 	int nexp_cut=nexp_cur-noutlier;
 	FILE_LOG(logDEBUG)<<"Reducing size to "<<nexp_cut<<endl;
 	dataM.setZero();
+	for(int i=0;i<missing.size();++i) {
+	  missing[i].clear();
+	}
+	for(int i=0;i<nexp_cut;++i) {
+
+	  missing.push_back(std::vector<bool>(exps[0].getCells(),false));
+	}
 	dataM.resize(nexp_cut,nvar_tot);
-	missing.resize(nexp_cut);
 	int cur_exp=0;
 	
 	hasMissing=false;
@@ -475,7 +482,7 @@ int main(int argc,char*argv[])
 	
 	outlier_iter++;
       }
-    } while (noutlier>0 && outlier_iter-1<max_outlier_iter);
+    } while (noutlier>0 && outlier_iter<max_outlier_iter);
   }
   
   
@@ -633,6 +640,6 @@ int main(int argc,char*argv[])
         
   }
   
- 
+  if(fitfile) delete fitfile;
 }
 
