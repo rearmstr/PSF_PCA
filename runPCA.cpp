@@ -285,7 +285,7 @@ int main(int argc,char*argv[])
   bool use_dash=params.read<bool>("use_dash",false);
   std::string prefix=params.read<std::string>("prefix","");
   int max_outlier_iter=params.read<int>("max_outlier_iter",100);
-  bool do_exp_rej=params.read<bool>("do_exp_rej",true);
+  bool do_exp_rej=params.read<bool>("do_exp_rej",false);
   bool do_obj_rej=params.read<bool>("do_obj_rej",false);
   int fit_order=params.read<int>("fit_order",-1);
   float sigma_clip=params.read<float>("sigma_clip",-1.);
@@ -360,8 +360,6 @@ int main(int argc,char*argv[])
   }  
    
 
-  
-
   // Build the data matrix
   DMatrix dataM(nexp,nvar_tot);
 
@@ -422,21 +420,22 @@ int main(int argc,char*argv[])
 
       noutlier=identifyOutliers<DMatrix>(U,outliers,exp_cut);
       int nexp_cur=U.nrows();
-      int iexp=0;
+
       FILE_LOG(logINFO)<<"Found "<<noutlier<<" outliers"<<endl;
 
       exp_names.clear();
-
+      int iexp=0;
       for(int i=0;i<nexp;++i) {
 	if(exps[i].isOutlier()) continue;
         
         if(outliers[iexp]) {
-          FILE_LOG(logINFO)<<"Removing Exposure "<<exps[iexp].getLabel()<<" outlier"<<endl;
+          FILE_LOG(logINFO)<<"Removing Exposure "<<exps[i].getLabel()<<" outlier"<<endl;
           exps[i].setOutlier(1);
         }
 	exp_names.push_back(exps[i].getLabel());
         iexp++;
       }
+
       FILE_LOG(logDEBUG)<<"Found "<<iexp<<" that were not rejected "<<endl;
       if(noutlier>0) {
 	int nexp_cut=nexp_cur-noutlier;
@@ -453,7 +452,7 @@ int main(int argc,char*argv[])
 	  DVector med=exps[i].getVals(type,vparams);
 	  missing[i]=exps[i].getMissing();
 	  for(int j=0;j<missing[i].size();++j) {
-	    if(missing[i][j])hasMissing=true;
+	    if(missing[i][j]) hasMissing=true;
 	  }
 	  dataM.row(cur_exp)=med;
 	  cur_exp++;

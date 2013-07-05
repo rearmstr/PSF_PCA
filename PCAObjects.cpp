@@ -159,8 +159,9 @@ namespace PCA {
     }
 
     if(this->getNGood()<3) {
-       FILE_LOG(logDEBUG1)<<"  this cell does not have at least three detections. "
-			 <<"It is now missing"<<endl;
+       FILE_LOG(logDEBUG1)<<"  this cell does not have at least "
+			  <<"three detections. "
+			  <<"It is now missing"<<endl;
       
       this->setMissing(true);
       return v;
