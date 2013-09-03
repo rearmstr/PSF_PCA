@@ -88,7 +88,7 @@ public:
   bool isClipped() {return clipped;}
   void setClipped(bool miss) {clipped=clipped;}
   bool isMissing() {return missing || getNGood()==0;}
-
+ 
   void setMissing(bool miss) {missing=miss;}
 
   std::vector<T> getVals(std::string type,std::vector<float> &params);
@@ -101,7 +101,7 @@ public:
   std::vector<T> getMeanClipVals(float clip);
   std::vector<T> getMedianVals();
   std::vector<T> getFitVals(int order=1);
-
+ 
 
   int getNVal(std::string type,std::vector<float> &params);
 
