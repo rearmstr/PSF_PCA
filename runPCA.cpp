@@ -439,9 +439,11 @@ int main(int argc,char*argv[])
     nvar_tot*=(fit_order+1)*(fit_order+2)/2;
     nvar*=(fit_order+1)*(fit_order+2)/2;
   }
+  else fit_order=0;
   if(type=="mean_clip") {
     assert(sigma_clip>0);
     vparams[0]=sigma_clip; 
+
   }
 
   // artificially remove data from each exposure
