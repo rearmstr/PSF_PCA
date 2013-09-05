@@ -59,7 +59,7 @@ namespace PCA {
   int Cell<T>::getNClip() {
     int nclip=0;
     for(int i=0;i<dets.size();++i) {
-      if(dets[i]->isClipped()) nclip++;
+
     }
     return nclip;
   }
@@ -68,15 +68,19 @@ namespace PCA {
   template<class T>
   std::vector<T> Cell<T>::getMeanVals()
   {
+
+    int ngood=this->getNGood();
     std::vector<T> v(nvar,defaultVal);
-    if (dets.size()==0) {
-       FILE_LOG(logDEBUG1)<<"  this cell does not have at least three detections. "<<endl;
+    if (ngood==0) {
+       FILE_LOG(logDEBUG1)<<"  this cell does not have at least one detections. "<<endl;
+       this->setMissing(true);
        return v;
     }
 
     for(int j=0;j<nvar;++j) v[j]=0;
 
     for(int i=0;i<dets.size();++i) {
+      if(dets[i]->isClipped()) continue;
       for(int j=0;j<nvar;++j) {
         v[j]+=dets[i]->getVal(j);
       }
@@ -100,9 +104,10 @@ namespace PCA {
   std::vector<T> Cell<T>::getMedianVals()
   {
     std::vector<T> v(nvar,defaultVal);
-
-    if(dets.size()<3) {
+    int ngood=this->getNGood();
+    if(ngood<3) {
       FILE_LOG(logDEBUG1)<<"  this cell does not have at least three detections. "<<endl;
+      this->setMissing(true);
       return v;
     }
     for(int j=0;j<nvar;++j) v[j]=0;
@@ -110,6 +115,7 @@ namespace PCA {
     for(int j=0;j<nvar;++j) {
       std::vector<T> tmp;      
       for(int i=0;i<dets.size();++i) {
+	if(dets[i]->isClipped()) continue;
         tmp.push_back(dets[i]->getVal(j));
       }
       v[j]=median<T>(tmp);
@@ -128,9 +134,10 @@ namespace PCA {
 
     std::vector<T> v(nvar,defaultVal);
     FILE_LOG(logDEBUG1)<<"   Meanclips with :"<<dets.size()<<endl;
-
-    if(dets.size()<1) {
-      FILE_LOG(logDEBUG1)<<"  this cell does not have at least three detections. "<<endl;
+    int ngood=this->getNGood();
+    if(ngood<1) {
+      FILE_LOG(logDEBUG1)<<"  this cell does not have at least one detections. "<<endl;
+      this->setMissing(1);
       return v;
     }
 
@@ -142,12 +149,12 @@ namespace PCA {
     for(int j=0;j<nvar;++j) {
 
       FILE_LOG(logDEBUG1)<<"   Getting variable: "<<j<<endl;
-      std::vector<T> tmp(dets.size());     
+      std::vector<T> tmp(ngood);     
       
       int cur=0;
       for(int i=0;i<dets.size();++i) {
-	
-	tmp[i]=(dets[i]->getVal(j));
+	if(dets[i]->isClipped()) continue;
+	tmp[cur]=(dets[i]->getVal(j));
 	cur++;
       }
       double mad;
@@ -159,6 +166,7 @@ namespace PCA {
       cur=0;
       int ngood=0;
       for(int i=0;i<dets.size();++i) {
+	if(dets[i]->isClipped()) continue;
 
 	if( std::abs(dets[i]->getVal(j)-median) > clip*mad) {
           FILE_LOG(logDEBUG2)<<"   Clipping object "<<i
@@ -198,7 +206,7 @@ namespace PCA {
   {
     fitorder=order;
     int nfit=(fitorder+1)*(fitorder+2)/2;
-    int ndet=dets.size();
+    int ndet=this->getNGood();
     std::vector<T> v(nvar*nfit,defaultVal);    
 
 
@@ -215,19 +223,26 @@ namespace PCA {
     DMatrix b(ndet,nvar);
     DMatrix A(ndet,nfit);
 
+    int cur=0;
     for(int j=0;j<nvar;++j) {
+      cur=0;
       for(int i=0;i<dets.size();++i) {
-	b(i,j)=dets[i]->getVal(j);
+	if(dets[i]->isClipped()) continue;
+	b(cur,j)=dets[i]->getVal(j);
+	cur++;
       }
     }
     FILE_LOG(logDEBUG)<<"data "<<b<<endl;
+    cur=0;
     for(int n=0;n<dets.size();++n) {
-      setPRow(fitorder,dets[n]->getPos(),bounds,A.row(n));
+      if(dets[n]->isClipped()) continue;
+      setPRow(fitorder,dets[n]->getPos(),bounds,A.row(cur));
+      cur++;
     }
     FILE_LOG(logDEBUG)<<"poses "<<A<<endl;
     DMatrix x=b/A;
     FILE_LOG(logDEBUG)<<"x "<<x<<endl;
-    int cur=0;
+    cur=0;
     for(int i=0;i<x.nrows();++i) {
       for(int j=0;j<x.ncols();++j) {
         v[cur]=x(i,j);
@@ -287,7 +302,7 @@ namespace PCA {
 
 
   template<class T>
-  std::vector<T> Cell<T>::getDiff(tmv::Vector<T> vals,std::string type,
+  std::vector<T> Cell<T>::getDiff(tmv::ConstVectorView<T> &vals,std::string type,
 				  std::vector<float> params,bool clip,
 				  double mean,double sigma,
 				  double nclip)
@@ -314,10 +329,11 @@ namespace PCA {
 	      FILE_LOG(logDEBUG1)<<"  setting var "<<j<<" det "<<i<<" as clipped "
 				 <<diff<<" compared to "<<nclip<<endl;
 	      
-	      vdiff.push_back(vals[j]-dets[i]->getVal(j));
 	      
 	      dets[i]->setClip(true);
 	    }
+	    else  vdiff.push_back(vals[j]-dets[i]->getVal(j));
+
 	  }
 	}
       }
@@ -366,8 +382,9 @@ namespace PCA {
 	      FILE_LOG(logDEBUG1)<<"  setting var "<<j<<" det "<<i<<" as clipped "
 				 <<diff<<" compared to "<<nclip<<endl;
 	    }
+	    else vdiff.push_back(diff);
 	  }
-	cur++;
+	  cur++;
 	}
               
       }
@@ -818,7 +835,7 @@ namespace PCA {
   }
 
   template<class T>
-  void Exposure<T>::outlierReject(const tmv::Vector<T> &data_r,
+  double Exposure<T>::outlierReject(const tmv::Vector<T> &data_r,
 				  double sigma,string type,
 				  std::vector<float> params)
   {
@@ -827,19 +844,39 @@ namespace PCA {
     std::vector<double> diff_all;
     FILE_LOG(logDEBUG)<<"Exposure "<<label<<" outlier "<<endl;
 
+    int ichip=0;
+    int nperchip;
     // compute median and deviation for the exposure
-    for(; iter!=chips.end();++iter) {
-      FILE_LOG(logDEBUG)<<" Chip "<<iter->first<<endl;
+    for(; iter!=chips.end();++iter,++ichip) {
+
+      if(ichip==0) {
+	nvar=iter->second->getCell(0)->getNVar();
+	nperchip=nx_chip*ny_chip*nvar;
+	if(type=="fit") {
+	  int order=(params[0]+1)*(params[0]+2)/2;
+	  nvar*=order;
+	  nperchip*=order;
+	}
+      }
+
+      
+      tmv::ConstVectorView<T> data_chip=data_r.subVector(ichip*nperchip,(ichip+1)*nperchip);
+
+      FILE_LOG(logDEBUG)<<" Finding Outliers Chip "<<iter->first<<endl
+	;
       for(int icell=0;icell<iter->second->getNCell();++icell) {
+
 	
+	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvar,(icell+1)*nvar);
+		
 	// do not test missing data that was added later or that may have -999
 	if(iter->second->getCell(icell)->isMissing()) continue;
 	
-	std::vector<double> diff=iter->second->getCell(icell)->getDiff(data_r,type,params,false);
+	std::vector<double> diff=iter->second->getCell(icell)->getDiff(data_cell,type,params,false);
 	copy(diff.begin(),diff.end(),std::back_inserter(diff_all));
 	double mad;
 	double median=median_mad(diff,mad);
-	FILE_LOG(logDEBUG)<<"  vcell "<<icell<<" :"<<median<<" "<<mad<<endl;
+	FILE_LOG(logDEBUG)<<"  vcell1 "<<icell<<" :"<<median<<" "<<mad<<endl;
       }
     }
     
@@ -847,17 +884,30 @@ namespace PCA {
     double mad;
     double median=median_mad(diff_all,mad);
     iter=chips.begin();
-    FILE_LOG(logDEBUG)<<"   totalres: "<<median<<" :"<<mad<<endl;
-    for(; iter!=chips.end();++iter) {
-      
+    FILE_LOG(logDEBUG)<<"   totalres1: "<<median<<" :"<<mad<<endl;
+    ichip=0;
+    diff_all.clear();
+    for(; iter!=chips.end();++iter,ichip++) {
+      tmv::ConstVectorView<T> data_chip=data_r.subVector(ichip*nperchip,(ichip+1)*nperchip);
       FILE_LOG(logDEBUG)<<" removing from Chip "<<iter->first<<endl;
       for(int icell=0;icell<iter->second->getNCell();++icell) {
-	
+	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvar,(icell+1)*nvar);
 	if(iter->second->getCell(icell)->isMissing()) continue;
-	iter->second->getCell(icell)->getDiff(data_r,type,params,true,
-					      median,mad,sigma);
+	std::vector<double> diff=iter->second->getCell(icell)->getDiff(data_cell,type,params,true,
+								       median,mad,sigma);
+
+	copy(diff.begin(),diff.end(),std::back_inserter(diff_all));
+	double mad;
+	double median=median_mad(diff,mad);
+	FILE_LOG(logDEBUG)<<"  vcell2 "<<icell<<" :"<<median<<" "<<mad<<endl;
       }
     }
+
+
+    median=median_mad(diff_all,mad);
+    FILE_LOG(logDEBUG)<<"   totalres2: "<<median<<" :"<<mad<<endl;
+    return median;
+    
   }
   
 

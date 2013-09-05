@@ -61,54 +61,68 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 
     T1 C(nvar,npc);
     T1 x(npc,nexp);
-    // use a random subset of data equal to the number of pcs to
-    // give an initial solution via svd
-    // select a random set of exposures to initialize the solution
-    vector<int> rands;
-    while(rands.size()<npc) {
-      int n=ran01()*nexp;
-      if(find(rands.begin(),rands.end(),n)==rands.end()) {
-	bool miss=false;
-	for(int i=0;i<missing[n].size();++i) {
-	  if(missing[n][i]) miss=true;
-	}
 
-	if(miss) continue;
-	rands.push_back(n);
+    int nall=0;
+    for(int i=0;i<missing.size();++i) {
+      bool miss=false;
+      for(int j=0;j<missing[i].size();++j) {
+	if(missing[i][j]) miss=true;
+      }
+      if (!miss) nall++;
+    }
+
+    
+    if(nall>npc) {
+
+      // use a random subset of data equal to the number of pcs to
+      // give an initial solution via svd
+      // select a random set of exposures to initialize the solution
+      vector<int> rands;
+      while(rands.size()<npc) {
+	int n=ran01()*nexp;
+	if(find(rands.begin(),rands.end(),n)==rands.end()) {
+	  bool miss=false;
+	  for(int i=0;i<missing[n].size();++i) {
+	    if(missing[n][i]) miss=true;
+	  }
+	  
+	  if(miss) continue;
+	  rands.push_back(n);
+	}
+      }
+      
+      
+      for(int i=0;i<npc;++i) {
+	FILE_LOG(logDEBUG)<<"Selected "<<rands[i]<<" for initial svd"<<endl;
+	Vt.row(i)=data.row(rands[i]);
+      }
+      FILE_LOG(logDEBUG)<<"Initial Decomposition "<<endl;
+      FILE_LOG(logDEBUG)<<"Vt: "<<Vt<<endl;
+      SV_Decompose(Vt.transpose(),Svec,U.transpose(),true);
+      
+      
+      C=Vt.transpose();
+      
+      for(int i=0;i<rands.size();++i) {
+	x.col(i)=Svec(i)*U.col(i);
       }
     }
-
-    
-    for(int i=0;i<npc;++i) {
-      FILE_LOG(logDEBUG)<<"Selected "<<rands[i]<<" for initial svd"<<endl;
-       Vt.row(i)=data.row(rands[i]);
+    else {
+      FILE_LOG(logINFO)<<"Not enough full exposures.  Using random starting matrix"<<endl;
+      for(int i=0;i<nvar;++i) {
+	for(int j=0;j<npc;++j) {
+	  C(i,j)=ran01();
+	}
+      }
+      
+      for(int i=0;i<npc;++i) {
+	for(int j=0;j<nexp;++j) {
+	  x(i,j)=ran01();
+	}
+      }
     }
-    FILE_LOG(logDEBUG)<<"Initial Decomposition "<<endl;
-    FILE_LOG(logDEBUG)<<"Vt: "<<Vt<<endl;
-    SV_Decompose(Vt.transpose(),Svec,U.transpose(),true);
-
-
-    C=Vt.transpose();
-
-    for(int i=0;i<rands.size();++i) {
-      x.col(i)=Svec(i)*U.col(i);
-    }
-
     
-//     for(int i=0;i<nvar;++i) {
-//       for(int j=0;j<npc;++j) {
-// 	C(i,j)=ran01();
-//       }
-//     }
-
-//     for(int i=0;i<npc;++i) {
-//       for(int j=0;j<nexp;++j) {
-// 	x(i,j)=ran01();
-//       }
-//     }
-
     
-
     FILE_LOG(logDEBUG)<<"Initial C:"<<C<<endl;
     
     for(int iter=0;iter<max_iter;++iter) {
@@ -440,6 +454,7 @@ int main(int argc,char*argv[])
     nvar*=(fit_order+1)*(fit_order+2)/2;
   }
   else fit_order=0;
+
   if(type=="mean_clip") {
     assert(sigma_clip>0);
     vparams[0]=sigma_clip; 
@@ -612,7 +627,7 @@ int main(int argc,char*argv[])
    
   if(do_obj_rej) {
     
-    FILE_LOG(logINFO)<<"Doing star rejection on each exposure"<<endl;
+    FILE_LOG(logINFO)<<"Doing star rejection on each exposure iter "<<endl;
     DMatrix dataR=U*Svec*Vt;
     if(subtract_mean) {
       for(int i=0;i<dataR.ncols();i++) dataR.col(i).addToAll(mean(i));
@@ -622,8 +637,9 @@ int main(int argc,char*argv[])
     for(int i=0;i<nexp;++i) {
       if(exps[i].isOutlier()) continue;
       DVector data_exp=dataR.row(i);
-      cout<<"REexp "<<i<<" "<<type<<endl;
-      exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
+
+      double ave_res=exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
+      cout<<"REexp "<<i<<" "<<ave_res<<endl;
     }
 
     bool hasMissing=false;
@@ -649,7 +665,7 @@ int main(int argc,char*argv[])
       mean=meanRemove<DMatrix>(dataM,nvar,missing);
 
     }
-    FILE_LOG(logINFO)<<"Redoing Decomposition"<<endl;
+    FILE_LOG(logINFO)<<"Redoing Decomposition "<<endl;
     doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,cur_exp,U,Svec,Vt,missing,
 			       do_em,em_pc,max_iter,tol,hasMissing); 
 

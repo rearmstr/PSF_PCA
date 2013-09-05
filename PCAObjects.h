@@ -94,7 +94,7 @@ public:
   std::vector<T> getVals(std::string type,std::vector<float> &params);
 
   std::vector<T> getMeanVals();
-  std::vector<T> getDiff(tmv::Vector<T> vals,std::string type,
+  std::vector<T> getDiff(tmv::ConstVectorView<T> &vals,std::string type,
 			 std::vector<float> params,bool clip=false,
 			 double mean=-1,double sigma=-1,
 			 double nclip=-1);
@@ -104,6 +104,7 @@ public:
  
 
   int getNVal(std::string type,std::vector<float> &params);
+  int getNVar() {return nvar;}
 
   enum ValType {Mean=1,MeanClip=2,Median=3,Fit=4};
 
@@ -195,7 +196,7 @@ public:
   int getNClip();
   int getNGood();
   int getNDet();
-  void outlierReject(const tmv::Vector<T> &data_r,double sigma,std::string type,std::vector<float> param);
+  double outlierReject(const tmv::Vector<T> &data_r,double sigma,std::string type,std::vector<float> param);
 
 private:
   float xmax_chip;
