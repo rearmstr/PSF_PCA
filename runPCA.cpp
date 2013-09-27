@@ -16,8 +16,8 @@ bool XDEBUG = false;
 template<class T1,class T2>
 void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
            T2 &Svec,T1 &Vt,std::vector<std::vector<bool> > &missing,
-	   bool use_em=false,int npc=20,
-	   int max_iter=1000,double tol=1e-6,bool do_missing=false)
+	   bool use_em,int npc,
+	   int max_iter,double tol,bool do_missing,T1 &C,T1 &x)
   
 {
   if(!use_em) {
@@ -59,8 +59,35 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
     Svec.resize(npc);
     U.resize(npc,npc);
 
-    T1 C(nvar,npc);
-    T1 x(npc,nexp);
+    //T1 C(nvar,npc);
+    //T1 x(npc,nexp);
+    bool use_old=true;
+//     if(C.ncols()!=npc && C.nrows()!=nvar ) {
+//       && x.ncols()!=nexp && x.nrows()!=npc) {
+//       C.resize(nvar,npc);
+//       x.resize(npc,nexp);
+//       C.setZero();
+//       x.setZero();
+//       use_old=false;
+//     }
+    if(C.ncols()==1 && C.nrows()==1 
+       && x.ncols()==1 && x.nrows()==1) {
+      
+      C.resize(nvar,npc);
+      x.resize(npc,nexp);
+      C.setZero();
+      x.setZero();
+
+      use_old=false;
+    }
+    else {
+      if( nexp<x.ncols() ) {
+	x.resize(npc,nexp);
+      }
+    }
+
+      
+
 
     int nall=0;
     for(int i=0;i<missing.size();++i) {
@@ -70,9 +97,9 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
       }
       if (!miss) nall++;
     }
-
+    if(!do_missing) nall=npc;
     
-    if(nall>npc) {
+    if(nall>=npc && !use_old) {
 
       // use a random subset of data equal to the number of pcs to
       // give an initial solution via svd
@@ -90,7 +117,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 	  rands.push_back(n);
 	}
       }
-      
+    
       
       for(int i=0;i<npc;++i) {
 	FILE_LOG(logDEBUG)<<"Selected "<<rands[i]<<" for initial svd"<<endl;
@@ -107,7 +134,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 	x.col(i)=Svec(i)*U.col(i);
       }
     }
-    else {
+    else if (!use_old) {
       FILE_LOG(logINFO)<<"Not enough full exposures.  Using random starting matrix"<<endl;
       for(int i=0;i<nvar;++i) {
 	for(int j=0;j<npc;++j) {
@@ -121,7 +148,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 	}
       }
     }
-    
+      
     
     FILE_LOG(logDEBUG)<<"Initial C:"<<C<<endl;
     
@@ -145,7 +172,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
       }
       else {
 	
-	assert(missing.size()>1);
+	//assert(missing.size()>1);
 	//x.setZero();
 	// Solve for each exposure independently.  Could add openmp here later
 	for(int iexp=0;iexp<nexp;iexp++) {
@@ -166,7 +193,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 			      <<nmiss<<" variables"<<endl;
 	  }
 
-	  if(!cell_miss) {
+	  if(!cell_miss && 0) {
 	    
 	    T1 tmp=C.transpose()*C;
 	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*
@@ -384,7 +411,9 @@ int main(int argc,char*argv[])
   int em_pc=params.read<int>("em_pc",20);
   float tol=params.read<float>("tol",1e-6);
   float add_missing=params.read<float>("add_missing",-1);
+  bool use_missing=params.read<bool>("use_missing",false);
   bool write_fits=params.read<bool>("write_fits",true);
+  bool write_obj=params.read<bool>("write_obj",false);
   string read_fits=params.read<string>("read_fits","");
 
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
@@ -424,16 +453,19 @@ int main(int argc,char*argv[])
     }
     
   
-    if(missing && !do_em) {
+    if(missing && (!do_em || !use_missing)) {
       FILE_LOG(logINFO)<<"Exposure "<<name<<" has missing data.  skipping..."
 		       <<endl;
       continue;
     }
-    else if(missing) {
+    else if(missing && use_missing) {
       FILE_LOG(logINFO)<<"Exposure "<<name<<" has missing data."<<endl;
     }
-    exp_names.push_back(name);
-    if(suc) exps.push_back(exp);
+    if(suc) {
+      exps.push_back(exp);
+      exp_names.push_back(name);
+    }
+ 
     if(exps.size()>(max_exp-1) && max_exp>0) break;
   }
   
@@ -490,6 +522,8 @@ int main(int argc,char*argv[])
     dataM.row(i)=med;
   }
 
+
+
   // keep this around to write out full data matrix
   DMatrix original_data(nexp,nvar_tot);
   if(subtract_mean) original_data=dataM;
@@ -507,15 +541,16 @@ int main(int argc,char*argv[])
   if(subtract_mean) mean=meanRemove(dataM,nvar,missing);
 
   
+  if(hasMissing && !use_missing) hasMissing=false;
   // matrices for svd
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
-  
+  DMatrix C(1,1),x(1,1);
   doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,nexp,U,Svec,Vt,missing,
-			     do_em,em_pc,max_iter,tol,hasMissing);
+			     do_em,em_pc,max_iter,tol,hasMissing,C,x);
 
 
-  if(hasMissing && do_em ) {
+  if(hasMissing && do_em && use_missing) {
     for(int i=0;i<dataM.ncols();++i) {
       if(subtract_mean) {
 	original_data.col(i)=dataM.col(i).addToAll(mean(i));
@@ -605,7 +640,7 @@ int main(int argc,char*argv[])
 	}
 	
 	doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,nexp_cut,U,Svec,Vt,missing,
-				   do_em,em_pc,max_iter,tol,hasMissing);    
+				   do_em,em_pc,max_iter,tol,hasMissing,C,x);    
 	
 
 	if(hasMissing && do_em ) {
@@ -638,8 +673,8 @@ int main(int argc,char*argv[])
       if(exps[i].isOutlier()) continue;
       DVector data_exp=dataR.row(i);
 
-      double ave_res=exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
-      cout<<"REexp "<<i<<" "<<ave_res<<endl;
+      vector<double> ave_res=exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
+      //cout<<"REexp "<<i<<" "<<ave_res<<endl;
     }
 
     bool hasMissing=false;
@@ -667,7 +702,7 @@ int main(int argc,char*argv[])
     }
     FILE_LOG(logINFO)<<"Redoing Decomposition "<<endl;
     doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,cur_exp,U,Svec,Vt,missing,
-			       do_em,em_pc,max_iter,tol,hasMissing); 
+			       do_em,em_pc,max_iter,tol,hasMissing,C,x); 
 
     if(hasMissing && do_em) {
       for(int i=0;i<dataM.ncols();++i) {
@@ -684,6 +719,228 @@ int main(int argc,char*argv[])
     
   }
   
+  DMatrix dataR=U*Svec*Vt;
+  if (write_obj) {
+    // write the residual exposure information
+    vector<int> rexp;//exposure number
+    vector<int> rccd;
+    vector<bool> rclip;
+    vector<int> rcell;
+    vector<float> rx;
+    vector<float> ry;
+    vector<valarray<double> > mvals;
+    vector<valarray<double> > rvals;
+    int cur_exp=0;
+    for(int iexp=0;iexp<nexp;++iexp) {
+      if(exps[iexp].isOutlier()) continue;
+      //cout<<iexp<<endl;
+      DVector data_r=dataR.row(cur_exp);
+      int nperchip=nx*ny*nvar;
+      // compute median and deviation for the exposure
+      // need a good way to iterate through chips
+      int cchip=0;
+      for(int ichip=1; ichip<exps[iexp].getNChip()+1;++ichip) {
+	if(ichip==61 && skip61) continue;
+	//cout<<"  "<<ichip<<endl;
+	int lchip=exps[iexp].getChip(ichip)->getLabel();
+
+	tmv::ConstVectorView<double> data_chip=data_r.subVector(cchip*nperchip,
+								(cchip+1)*nperchip);
+
+	for(int icell=0;icell<exps[iexp].getChip(ichip)->getNCell();++icell) {
+	  //cout<<"    "<<icell<<endl;
+	  tmv::ConstVectorView<double> data_cell=
+	    data_chip.subVector(icell*nvar,(icell+1)*nvar);
+
+	  int ndet=exps[iexp].getChip(ichip)->getCell(icell)->getNDet();
+	  vector<valarray<double> > rv=
+	    exps[iexp].getChip(ichip)->getCell(icell)
+	    ->getDetVals(data_cell,type,vparams);
+
+	  for(int idet=0;idet<ndet;++idet) {
+	    //cout<<"      "<<idet<<rv[idet].size()<<endl;
+	    Detection<double> *det=exps[iexp].getChip(ichip)
+	      ->getCell(icell)->getDet(idet);
+	    rx.push_back(det->getPos().x);
+	    ry.push_back(det->getPos().y);
+	    rexp.push_back(cur_exp);
+	    rcell.push_back(icell);
+	    rccd.push_back(lchip);
+	    rclip.push_back(det->isClipped());
+	    rvals.push_back(rv[idet]);
+	    mvals.push_back(det->getVVals());
+	    delete det;
+	  }
+	}
+	cchip++;
+      }
+      cur_exp++;
+
+  }
+	    
+  FITS *rfitfile=0;
+  long naxis    =   2;      
+  long naxes1[2] = { 1, 1 }; 
+  rfitfile=new FITS("!r_"+outname+".fits",USHORT_IMG , naxis , naxes1 );
+  // write the exposure information
+  int nwvar=8;
+  int nrows=rexp.size();
+  std::vector<string> colName(nwvar,"");
+  std::vector<string> colForm(nwvar,"");
+  std::vector<string> colUnit(nwvar,"");
+  colName[0] = "exposure";
+  colName[1] = "x";
+  colName[2] = "y";
+  colName[3] = "ccd";
+  colName[4] = "clip";
+  colName[5] = "cell";
+  colName[6] = "mval";
+  colName[7] = "rval";
+
+  std::stringstream v_form;
+  v_form << nvar << "D";
+
+  colForm[0] = "1J";
+  colForm[1] = "1E";
+  colForm[2] = "1E";
+  colForm[3] = "1J";
+  colForm[4] = "1I";
+  colForm[5] = "1J";
+  colForm[6] = v_form.str();
+  colForm[7] = v_form.str();
+
+  colUnit[0] = "";
+  colUnit[1] = "";
+  colUnit[2] = "";
+  colUnit[3] = "";
+  colUnit[4] = "";
+  colUnit[5] = "";
+  colUnit[6] = "";
+  colUnit[7] = "";
+  Table* newTable = rfitfile->addTable("residuals",nrows,colName,colForm,colUnit);
+  newTable->column(colName[0]).write(rexp,1);
+  newTable->column(colName[1]).write(rx,1);
+  newTable->column(colName[2]).write(ry,1);
+  newTable->column(colName[3]).write(rccd,1);
+  newTable->column(colName[4]).write(rclip,1);
+  newTable->column(colName[5]).write(rcell,1);
+  newTable->column(colName[6]).writeArrays(mvals,1);
+  newTable->column(colName[7]).writeArrays(rvals,1);
+  
+  
+  }  
+
+
+
+//   if (1) {
+//     // write the residual exposure information
+//     vector<int> rexp;//exposure number
+//     vector<int> rccd;
+//     vector<bool> rclip;
+//     vector<int> rcell;
+//     vector<float> rx;
+//     vector<float> ry;
+//     vector<valarray<double> > mvals;
+//     vector<valarray<double> > rvals;
+//     int cur_exp=0;
+//     for(int iexp=0;iexp<nexp;++iexp) {
+//       if(exps[iexp].isOutlier()) continue;
+//       //cout<<iexp<<endl;
+//       DVector data_r=dataR.row(iexp);
+//       int nperchip=nx*ny*nvar;
+//       // compute median and deviation for the exposure
+//       // need a good way to iterate through chips
+//       int cchip=0;
+//       for(int ichip=1; ichip<exps[iexp].getNChip()+1;++ichip) {
+// 	if(ichip==61 && skip61) continue;
+// 	//cout<<"  "<<ichip<<endl;
+// 	int lchip=exps[iexp].getChip(ichip)->getLabel();
+
+// 	tmv::ConstVectorView<double> data_chip=data_r.subVector(cchip*nperchip,
+// 								(cchip+1)*nperchip);
+
+// 	for(int icell=0;icell<exps[iexp].getChip(ichip)->getNCell();++icell) {
+// 	  //cout<<"    "<<icell<<endl;
+// 	  tmv::ConstVectorView<double> data_cell=
+// 	    data_chip.subVector(icell*nvar,(icell+1)*nvar);
+
+// 	  int ndet=exps[iexp].getChip(ichip)->getCell(icell)->getNDet();
+// 	  vector<valarray<double> > rv=
+// 	    exps[iexp].getChip(ichip)->getCell(icell)
+// 	    ->getDetVals(data_cell,type,vparams);
+
+// 	  for(int idet=0;idet<ndet;++idet) {
+// 	    //cout<<"      "<<idet<<rv[idet].size()<<endl;
+// 	    Detection<double> *det=exps[iexp].getChip(ichip)
+// 	      ->getCell(icell)->getDet(idet);
+// 	    rx.push_back(det->getPos().x);
+// 	    ry.push_back(det->getPos().y);
+// 	    rexp.push_back(cur_exp);
+// 	    rcell.push_back(icell);
+// 	    rccd.push_back(lchip);
+// 	    rclip.push_back(det->isClipped());
+// 	    rvals.push_back(rv[idet]);
+// 	    mvals.push_back(det->getVVals());
+// 	    delete det;
+// 	  }
+// 	}
+// 	cchip++;
+//       }
+//       cur_exp++;
+
+//   }
+	    
+//   FITS *rfitfile=0;
+//   long naxis    =   2;      
+//   long naxes1[2] = { 1, 1 }; 
+//   rfitfile=new FITS("!r_"+outname+".fits",USHORT_IMG , naxis , naxes1 );
+//   // write the exposure information
+//   int nwvar=8;
+//   int nrows=rexp.size();
+//   std::vector<string> colName(nwvar,"");
+//   std::vector<string> colForm(nwvar,"");
+//   std::vector<string> colUnit(nwvar,"");
+//   colName[0] = "exposure";
+//   colName[1] = "x";
+//   colName[2] = "y";
+//   colName[3] = "ccd";
+//   colName[4] = "clip";
+//   colName[5] = "cell";
+//   colName[6] = "mval";
+//   colName[7] = "rval";
+
+//   std::stringstream v_form;
+//  v_form << nvar << "D";
+
+//   colForm[0] = "1J";
+//   colForm[1] = "1E";
+//   colForm[2] = "1E";
+//   colForm[3] = "1J";
+//   colForm[4] = "1I";
+//   colForm[5] = "1J";
+//   colForm[6] = v_form.str();
+//   colForm[7] = v_form.str();
+
+//   colUnit[0] = "";
+//   colUnit[1] = "";
+//   colUnit[2] = "";
+//   colUnit[3] = "";
+//   colUnit[4] = "";
+//   colUnit[5] = "";
+//   colUnit[6] = "";
+//   colUnit[7] = "";
+//   Table* newTable = rfitfile->addTable("residuals",nrows,colName,colForm,colUnit);
+//   newTable->column(colName[0]).write(rexp,1);
+//   newTable->column(colName[1]).write(rx,1);
+//   newTable->column(colName[2]).write(ry,1);
+//   newTable->column(colName[3]).write(rccd,1);
+//   newTable->column(colName[4]).write(rclip,1);
+//   newTable->column(colName[5]).write(rcell,1);
+//   newTable->column(colName[6]).writeArrays(mvals,1);
+//   newTable->column(colName[7]).writeArrays(rvals,1);
+  
+  
+//   }  
 
 
   if(!write_fits) {
@@ -787,6 +1044,7 @@ int main(int argc,char*argv[])
     else {
       writeMatrixToFits<DMatrix>(fitfile,dataM,"data");
     }
+    writeMatrixToFits<DMatrix>(fitfile,dataR,"dataR");
     writeMatrixToFits<DMatrix>(fitfile,Vt,"vec");
     writeMatrixToFits<DMatrix>(fitfile,U,"coeff");
     writeVectorToFits<DVector>(fitfile,Svec.diag(),"singular");

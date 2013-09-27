@@ -286,6 +286,7 @@ namespace PCA {
     if(getTypeFromString(type)==Mean) {
       return nvar;
     }
+
     else if(getTypeFromString(type)==MeanClip) {
       return nvar;
     }
@@ -302,12 +303,14 @@ namespace PCA {
 
 
   template<class T>
-  std::vector<T> Cell<T>::getDiff(tmv::ConstVectorView<T> &vals,std::string type,
-				  std::vector<float> params,bool clip,
-				  double mean,double sigma,
-				  double nclip)
+  std::vector<std::vector<T> > Cell<T>::getDiff(tmv::ConstVectorView<T> &vals,std::string type,
+						std::vector<float> params,
+						const std::vector<double> &mean,
+						const std::vector<double> &sigma,
+						bool clip,
+						double nclip)
   {
-    std::vector<T> vdiff;
+    std::vector<std::vector<T> > vdiff(nvar);
     if(this->isMissing()) return  vdiff;
 
     if(getTypeFromString(type)!=Fit) {
@@ -320,10 +323,10 @@ namespace PCA {
 			       <<vals[j]<<" "<<dets[i]->getVal(j)<<" "
 			       <<vals[j]-dets[i]->getVal(j)<<endl;
 	    
-	    vdiff.push_back(vals[j]-dets[i]->getVal(j));
+	    vdiff[j].push_back(vals[j]-dets[i]->getVal(j));
 	  }
 	  else {
-	    double diff=std::fabs((vals[j]-dets[i]->getVal(j))-mean)/sigma;
+	    double diff=std::fabs((vals[j]-dets[i]->getVal(j))-mean[j])/sigma[j];
 	    if(diff>nclip) {
 	     
 	      FILE_LOG(logDEBUG1)<<"  setting var "<<j<<" det "<<i<<" as clipped "
@@ -332,7 +335,7 @@ namespace PCA {
 	      
 	      dets[i]->setClip(true);
 	    }
-	    else  vdiff.push_back(vals[j]-dets[i]->getVal(j));
+	    else  vdiff[j].push_back(vals[j]-dets[i]->getVal(j));
 
 	  }
 	}
@@ -342,6 +345,7 @@ namespace PCA {
       int fitorder=params[0];
       int nfit=(fitorder+1)*(fitorder+2)/2;
       int ndet=this->getNGood();
+      
       DMatrix br(ndet,nvar);
       DMatrix A(ndet,nfit);
       DMatrix x(nfit,nvar);
@@ -368,21 +372,21 @@ namespace PCA {
 	for(int i=0;i<dets.size();++i) {
 	  if(dets[i]->isClipped()) continue;
 	  
-	  double diff=br(cur,j)-dets[i]->getVal(j);
-	  
 	  if(!clip) {
 	    FILE_LOG(logDEBUG1)<<"  fit nvar "<<j<<" det "<<i<<" "
-			       <<br(cur,j)<<" "<<dets[i]->getVal(j)<<" "
-			       <<diff<<endl;
-	    vdiff.push_back(diff);
+			       <<br(cur,j)<<" "<<dets[i]->getVal(j)
+			       <<" "<<br(cur,j)-dets[i]->getVal(j)<<endl;
+			
+	    vdiff[j].push_back(br(cur,j)-dets[i]->getVal(j));
 	  }
 	  else {
-	    if(std::fabs(diff-mean)/sigma>nclip) {
+	    double diff=std::fabs( (br(cur,j)-dets[i]->getVal(j))-mean[j])/sigma[j];
+	    if(diff>nclip) {
 	      dets[i]->setClip(true);
 	      FILE_LOG(logDEBUG1)<<"  setting var "<<j<<" det "<<i<<" as clipped "
 				 <<diff<<" compared to "<<nclip<<endl;
 	    }
-	    else vdiff.push_back(diff);
+	    else vdiff[j].push_back(br(cur,j)-dets[i]->getVal(j));
 	  }
 	  cur++;
 	}
@@ -393,6 +397,59 @@ namespace PCA {
     return vdiff;
     
   }
+
+  template<class T>
+  std::vector<std::valarray<T> > Cell<T>::getDetVals(tmv::ConstVectorView<T> &vals,
+						     std::string type,std::vector<float> params)
+  {
+    std::vector<std::valarray<T> > vdet;
+
+    if(getTypeFromString(type)!=Fit) {
+      
+	for(int i=0;i<dets.size();++i) {
+	  std::valarray<T> sdet(nvar);
+	  for(int j=0;j<nvar;++j) {
+	    sdet[j]=vals[j];
+	  }
+	  vdet.push_back(sdet);
+	}
+    }
+    else {
+      int fitorder=params[0];
+      int nfit=(fitorder+1)*(fitorder+2)/2;
+      int ndet=this->getNDet();
+      DMatrix br(ndet,nvar);
+      DMatrix A(ndet,nfit);
+      DMatrix x(nfit,nvar);
+      
+      for(int n=0;n<dets.size();++n) {
+	setPRow(fitorder,dets[n]->getPos(),bounds,A.row(n));
+      }
+      int cur=0;
+      for(int i=0;i<nfit;++i) {
+	for(int j=0;j<nvar;++j) {
+	  x(i,j)=vals[cur];
+	  cur++;
+	}
+      }
+
+      br=A*x;
+      
+      for(int i=0;i<dets.size();++i) {
+	std::valarray<T> sdet(nvar);
+	for(int j=0;j<nvar;++j) {
+	  sdet[j]=br(i,j);
+	}
+	vdet.push_back(sdet);
+      }
+    }
+
+    return vdet;
+    
+  }
+  
+
+
 
 
   template<class T>
@@ -835,26 +892,28 @@ namespace PCA {
   }
 
   template<class T>
-  double Exposure<T>::outlierReject(const tmv::Vector<T> &data_r,
-				  double sigma,string type,
-				  std::vector<float> params)
+  std::vector<double> Exposure<T>::outlierReject(const tmv::Vector<T> &data_r,
+						 double sigma,string type,
+						 std::vector<float> params)
   {
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
     int cur=0;
-    std::vector<double> diff_all;
+    std::vector<std::vector<double> > diff_all;
     FILE_LOG(logDEBUG)<<"Exposure "<<label<<" outlier "<<endl;
 
     int ichip=0;
     int nperchip;
+    int nvartot;
     // compute median and deviation for the exposure
     for(; iter!=chips.end();++iter,++ichip) {
 
       if(ichip==0) {
 	nvar=iter->second->getCell(0)->getNVar();
 	nperchip=nx_chip*ny_chip*nvar;
+	nvartot=nvar;
 	if(type=="fit") {
 	  int order=(params[0]+1)*(params[0]+2)/2;
-	  nvar*=order;
+	  nvartot=nvar*order;
 	  nperchip*=order;
 	}
       }
@@ -867,45 +926,67 @@ namespace PCA {
       for(int icell=0;icell<iter->second->getNCell();++icell) {
 
 	
-	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvar,(icell+1)*nvar);
+	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvartot,(icell+1)*nvartot);
 		
 	// do not test missing data that was added later or that may have -999
 	if(iter->second->getCell(icell)->isMissing()) continue;
 	
-	std::vector<double> diff=iter->second->getCell(icell)->getDiff(data_cell,type,params,false);
-	copy(diff.begin(),diff.end(),std::back_inserter(diff_all));
-	double mad;
-	double median=median_mad(diff,mad);
-	FILE_LOG(logDEBUG)<<"  vcell1 "<<icell<<" :"<<median<<" "<<mad<<endl;
+	std::vector<double> d1,d2;
+	std::vector<std::vector<double> > diff=
+	  iter->second->getCell(icell)->getDiff(data_cell,type,params,d1,d2,false);
+
+	for(int ivar=0;ivar<nvar;++ivar) {
+	  std::vector<double> tmp;
+
+	  copy(diff[ivar].begin(),diff[ivar].end(),std::back_inserter(tmp));
+	  double dmad;
+	  double dmedian=median_mad(tmp,dmad);
+	  FILE_LOG(logDEBUG)<<"  ivar "<<ivar<<" vcell1 "<<icell<<" :"
+			    <<dmedian<<" "<<dmad<<endl;
+	  diff_all.push_back(tmp);
+	}
+	
       }
     }
     
     // now remove outliers
-    double mad;
-    double median=median_mad(diff_all,mad);
+    std::vector<double> mad(nvar);
+    std::vector<double> median(nvar);
+    for(int ivar=0;ivar<nvar;++ivar) {
+      median[ivar]=median_mad(diff_all[ivar],mad[ivar]);
+      FILE_LOG(logDEBUG)<<"   ivar "<<ivar<<" totalres1: "<<median[ivar]<<" :"<<mad[ivar]<<endl;
+    }
+
     iter=chips.begin();
-    FILE_LOG(logDEBUG)<<"   totalres1: "<<median<<" :"<<mad<<endl;
     ichip=0;
     diff_all.clear();
     for(; iter!=chips.end();++iter,ichip++) {
       tmv::ConstVectorView<T> data_chip=data_r.subVector(ichip*nperchip,(ichip+1)*nperchip);
       FILE_LOG(logDEBUG)<<" removing from Chip "<<iter->first<<endl;
       for(int icell=0;icell<iter->second->getNCell();++icell) {
-	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvar,(icell+1)*nvar);
+	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvartot,(icell+1)*nvartot);
 	if(iter->second->getCell(icell)->isMissing()) continue;
-	std::vector<double> diff=iter->second->getCell(icell)->getDiff(data_cell,type,params,true,
-								       median,mad,sigma);
 
-	copy(diff.begin(),diff.end(),std::back_inserter(diff_all));
-	double mad;
-	double median=median_mad(diff,mad);
-	FILE_LOG(logDEBUG)<<"  vcell2 "<<icell<<" :"<<median<<" "<<mad<<endl;
+	
+	std::vector<std::vector<double> > diff=
+	  iter->second->getCell(icell)->getDiff(data_cell,type,params,
+						median,mad, true,sigma);
+	
+	for(int ivar=0;ivar<nvar;++ivar) {
+	  std::vector<double> tmp;
+	  copy(diff[ivar].begin(),diff[ivar].end(),std::back_inserter(tmp));
+	  double dmad;
+	  double dmedian=median_mad(diff[ivar],dmad);
+	  diff_all.push_back(tmp);
+	  FILE_LOG(logDEBUG)<<"  ivar "<<ivar<<"vcell2 "<<icell<<" :"<<dmedian<<" "<<dmad<<endl;
+	}
       }
     }
-
-
-    median=median_mad(diff_all,mad);
-    FILE_LOG(logDEBUG)<<"   totalres2: "<<median<<" :"<<mad<<endl;
+    
+    for(int ivar=0;ivar<nvar;++ivar) {
+      median[ivar]=median_mad(diff_all[ivar],mad[ivar]);
+      FILE_LOG(logDEBUG)<<"   ivar "<<ivar<<" totalres2: "<<median[ivar]<<" :"<<mad[ivar]<<endl;
+    }
     return median;
     
   }

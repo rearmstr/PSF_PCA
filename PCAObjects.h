@@ -3,6 +3,7 @@
 
 #include "Bounds.h"
 #include <vector>
+#include <valarray>
 #include <map>
 #include <algorithm>
 #include "TMV.h"
@@ -41,10 +42,15 @@ class Detection {
 
  public:
 
-  Detection(float x,float y,int nobs) :pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
+  Detection(float x,float y,int nobs,double ra=-1,double dec=-1) :pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
   
   Position<float> getPos() {return pos;}
   std::vector<T> getVals() {return vals;}
+  std::valarray<T> getVVals() {
+    std::valarray<T> v(vals.size());
+    for(int i=0;i<vals.size();++i) v[i]=vals[i];
+    return v;
+  }
   float getVal(int i) {
     if(i>=0 && i<nval) return vals[i];
     return -9999.0;
@@ -62,6 +68,7 @@ class Detection {
 protected:
   int nval;
   Position<float> pos;
+  Position<double> sky;
   std::vector<T> vals;
   bool clip;
 };
@@ -94,10 +101,15 @@ public:
   std::vector<T> getVals(std::string type,std::vector<float> &params);
 
   std::vector<T> getMeanVals();
-  std::vector<T> getDiff(tmv::ConstVectorView<T> &vals,std::string type,
-			 std::vector<float> params,bool clip=false,
-			 double mean=-1,double sigma=-1,
-			 double nclip=-1);
+  std::vector<std::vector<T> > getDiff(tmv::ConstVectorView<T> &vals,std::string type,
+				       std::vector<float> params,
+				       const std::vector<double> &mean,
+				       const std::vector<double> &sigma,
+				       bool clip=false,
+				       double nclip=-1);
+                                     
+  std::vector<std::valarray<T> >getDetVals(tmv::ConstVectorView<T> &vals,
+					   std::string type,std::vector<float> params);
   std::vector<T> getMeanClipVals(float clip);
   std::vector<T> getMedianVals();
   std::vector<T> getFitVals(int order=1);
@@ -105,6 +117,11 @@ public:
 
   int getNVal(std::string type,std::vector<float> &params);
   int getNVar() {return nvar;}
+
+  Detection<T> * getDet(int i) {
+    if (i>=0 && i<dets.size()) return dets[i];
+    return 0;
+  }
 
   enum ValType {Mean=1,MeanClip=2,Median=3,Fit=4};
 
@@ -117,6 +134,7 @@ public:
     assert(0);
     return Mean;
   };
+
 
 private:
   int nvar;
@@ -147,6 +165,7 @@ public:
   int getNClip();
   int getNGood();
   int getNDet();
+  int getLabel() {return label;}
   //int getNVal(std::string type,std::vector<float> params);
 
 private:
@@ -179,12 +198,13 @@ public:
   Chip<T>* getChip(int i) {return chips[i];}
   int getCells() {return nx_chip*ny_chip*chips.size();}
   //int getNVal(std::string type,std::vector<float> params);
-  
+  int getNChip() {return nchip;}
   void setShapeStart(int start) {shapeStart=start;}
   void addSkip(int ichip) { skip.push_back(ichip);}
   void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
-  bool readShapelet(std::string dir,int nvar,bool include_miss=false,bool use_dash=false,std::string exposure="");
+  bool readShapelet(std::string dir,int nvar,bool 
+		    include_miss=false,bool use_dash=false,std::string exposure="");
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
@@ -196,15 +216,17 @@ public:
   int getNClip();
   int getNGood();
   int getNDet();
-  double outlierReject(const tmv::Vector<T> &data_r,double sigma,std::string type,std::vector<float> param);
+  std::vector<double> outlierReject(const tmv::Vector<T> &data_r,
+				    double sigma,std::string type,std::vector<float> param);
 
+  std::map<int,Chip<T>*> chips; // do I want to put this in public?  way to iterate through chips
 private:
   float xmax_chip;
   float ymax_chip;
   int nx_chip;
   int ny_chip;
   std::string label;
-  std::map<int,Chip<T>*> chips;
+
   std::vector<int> skip;
   int nchip;
   int nvar;
