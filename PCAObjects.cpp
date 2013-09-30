@@ -544,9 +544,10 @@ namespace PCA {
 
 
   template<class T>
-  Exposure<T>::Exposure (string _label,int _nchip, double _ra,double _dec,float _airmass):
+  Exposure<T>::Exposure (string _label,int _nchip, int _shapestart,double _ra,double _dec,float _airmass):
     label(_label),nchip(_nchip),ra(_ra),dec(_dec),airmass(_airmass),
-    nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),shapeStart(3),outlier(0) {}
+    nx_chip(-1.),ny_chip(-1.),xmax_chip(-1.),ymax_chip(-1.),
+    shapeStart(_shapestart),outlier(0) {}
 
   template<class T>
   int Exposure<T>::getNClip()
@@ -582,7 +583,9 @@ namespace PCA {
 
 
   template<class T>
-  bool Exposure<T>::readShapelet(std::string dir,int nvar,bool include_miss,bool use_dash,std::string exp) {
+  bool Exposure<T>::readShapelet(std::string dir,int nvar,bool add_size,
+				 bool include_miss,bool use_dash,
+				 std::string exp) {
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
@@ -617,17 +620,18 @@ namespace PCA {
         
         CCfits::ExtHDU& table = pInfile->extension(1);
         
-        
         long nTabRows=table.rows();
 	FILE_LOG(logDEBUG) << "found " << nTabRows<<" objects"<<endl;
         long start=1;
         long end=nTabRows;
         
         std::vector<int> psf_flags;
+	std::vector<double> psf_size;
         std::vector<double> xpos;
         std::vector<double> ypos;
         
         table.column("psf_flags").read(psf_flags, start, end);
+        table.column("sigma_p").read(psf_size, start, start+1);
         table.column("x").read(xpos, start, end);
         table.column("y").read(ypos, start, end);
         
@@ -650,7 +654,10 @@ namespace PCA {
               
               det->setVal(j,coeffs[shapeStart+j]);
             }
-            
+            if(add_size) {
+	      FILE_LOG(logDEBUG1)<<"adding size "<<psf_size[0]<<endl;
+	      det->setVal(0,psf_size[0]);
+	    }
             chip->addDet(det);
           }
         }

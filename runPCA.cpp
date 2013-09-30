@@ -415,7 +415,14 @@ int main(int argc,char*argv[])
   bool write_fits=params.read<bool>("write_fits",true);
   bool write_obj=params.read<bool>("write_obj",false);
   string read_fits=params.read<string>("read_fits","");
+  bool add_size=params.read<bool>("add_size",false);
+  int shapestart=3;
 
+
+  if(add_size) {
+    nvar+=1;
+    shapestart--;
+  }
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
 
@@ -425,14 +432,15 @@ int main(int argc,char*argv[])
   vector<string> exp_names;
   while(file>>name) {
     
-    Exposure<double> exp(name,ccd);
+    Exposure<double> exp(name,ccd,shapestart);
 
     exp.setChipDivide(nx,ny);
     exp.setChipMax(xmax,ymax);
     if(skip61) exp.addSkip(61);
     bool suc;
     if(shapelet) {
-      suc=exp.readShapelet(dir+name+"/",nvar,do_em,use_dash,prefix+name);
+      suc=exp.readShapelet(dir+name+"/",nvar,add_size,
+			   do_em,use_dash,prefix+name);
     }
     else {
       string fitsname=name;

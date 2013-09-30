@@ -183,7 +183,7 @@ template<class T=double>
 class Exposure {
 
 public:
-  Exposure(std::string _label,int _nchip, double ra=-9999.0,double dec=-9999.0,float airmass=-9999.0);
+  Exposure(std::string _label,int _nchip, int _shapestart=3,double ra=-9999.0,double dec=-9999.0,float airmass=-9999.0);
   
   void setChipDivide(int nx,int ny) {
     ny_chip=ny;
@@ -203,7 +203,7 @@ public:
   void addSkip(int ichip) { skip.push_back(ichip);}
   void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
-  bool readShapelet(std::string dir,int nvar,bool 
+  bool readShapelet(std::string dir,int nvar,bool add_size=false,bool 
 		    include_miss=false,bool use_dash=false,std::string exposure="");
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
