@@ -200,9 +200,9 @@ namespace PCA {
 
 
 
-  // Return the median values of all the detections in a cell
+  // Return a polynomial fit of all the detections in a cell
   template<class T>
-  std::vector<T> Cell<T>::getFitVals(int order)
+  std::vector<T> Cell<T>::getFitVals(int order,float clip)
   {
     fitorder=order;
     int nfit=(fitorder+1)*(fitorder+2)/2;
@@ -211,42 +211,85 @@ namespace PCA {
 
 
 
-    if(ndet<fitorder+1) {
+    if(ndet<nfit) {
       FILE_LOG(logDEBUG1)<<"  this cell has more parameters than detections "
-			 <<nfit<<" "<<ndet<<".  "<<endl;
+			 <<ndet<<" "<<nfit<<".  "<<endl;
       this->setMissing(true);
       return v;
     }
     
 
     FILE_LOG(logDEBUG)<<"getting fit vals for "<<ndet<<" detections "<<nfit<<endl;
-    DMatrix b(ndet,nvar);
-    DMatrix A(ndet,nfit);
 
-    int cur=0;
+
+
+    // we need to calculate first which objects we may need
+    // to reject.  We don't necesarily want to clip them because
+    // they may be useful in better iterations
+    std::vector<bool> use_det(ndet,true);
     for(int j=0;j<nvar;++j) {
-      cur=0;
+
+      std::vector<T> tmp;     
+      
       for(int i=0;i<dets.size();++i) {
 	if(dets[i]->isClipped()) continue;
+	tmp.push_back(dets[i]->getVal(j));
+      }
+      double mad;
+      double median=median_mad(tmp,mad);
+
+      
+      for(int i=0;i<dets.size();++i) {
+	if(dets[i]->isClipped()) continue;
+
+	// check that is within 5 sigma
+	if(std::fabs(dets[i]->getVal(j)-median)>clip*mad) {
+	   FILE_LOG(logDEBUG)<<"skipping "<<i<<" value to large "
+			     <<std::fabs(dets[i]->getVal(j)-median)/mad<<" sigma"<<endl;
+ 	  use_det[i]=false;
+	}
+	
+      }
+    }
+    
+    int ndet_cur=0;
+    for(int i=0;i<dets.size();++i) if(use_det[i]) ndet_cur++;
+
+    if(ndet_cur<nfit) {
+      FILE_LOG(logDEBUG1)<<"  this cell has more parameters than detections "
+			 <<ndet<<" "<<nfit<<".  "<<endl;
+      this->setMissing(true);
+      return v;
+    }
+
+    FILE_LOG(logDEBUG)<<"using "<<ndet_cur<<" objects "<<endl;
+    DMatrix b(ndet_cur,nvar);
+    DMatrix A(ndet_cur,nfit);
+    
+
+
+    for(int j=0;j<nvar;++j) {
+      int cur=0;    
+      for(int i=0;i<dets.size();++i) {
+	if(dets[i]->isClipped() || !use_det[i]) continue;
 	b(cur,j)=dets[i]->getVal(j);
+	setPRow(fitorder,dets[i]->getPos(),bounds,A.row(cur));
 	cur++;
       }
     }
     FILE_LOG(logDEBUG)<<"data "<<b<<endl;
-    cur=0;
-    for(int n=0;n<dets.size();++n) {
-      if(dets[n]->isClipped()) continue;
-      setPRow(fitorder,dets[n]->getPos(),bounds,A.row(cur));
-      cur++;
-    }
+
     FILE_LOG(logDEBUG)<<"poses "<<A<<endl;
-    DMatrix x=b/A;
+    DMatrix x=b/A;//b.subMatrix(0,cur,0,nvar)/A.subMatrix(0,cur,0,ndet);
     FILE_LOG(logDEBUG)<<"x "<<x<<endl;
-    cur=0;
+
+
+    int cur=0;
     for(int i=0;i<x.nrows();++i) {
       for(int j=0;j<x.ncols();++j) {
+	
         v[cur]=x(i,j);
-        cur++;
+	cur++;
       }
     }
 
@@ -272,7 +315,8 @@ namespace PCA {
     else if(getTypeFromString(type)==Fit) {
       assert(params.size()>=1);
       int order=static_cast<int>(params[0]);
-      return getFitVals(order);
+      float clip=params[1];
+      return getFitVals(order,clip);
     }
     
   }
@@ -584,7 +628,7 @@ namespace PCA {
 
   template<class T>
   bool Exposure<T>::readShapelet(std::string dir,int nvar,bool add_size,
-				 bool include_miss,bool use_dash,
+				 bool include_miss,bool use_dash,string suffix,
 				 std::string exp) {
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
@@ -607,10 +651,10 @@ namespace PCA {
       if(ichip<10) inputFile <<0;
       
       if(!use_dash) {
-        inputFile << ichip << "_psf.fits";
+        inputFile << ichip << "_"+suffix;
       }
       else {
-        inputFile << ichip << "-psf.fits";
+        inputFile << ichip << "-"+suffix;
       }
 
 

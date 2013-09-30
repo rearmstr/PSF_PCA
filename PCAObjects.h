@@ -112,7 +112,7 @@ public:
 					   std::string type,std::vector<float> params);
   std::vector<T> getMeanClipVals(float clip);
   std::vector<T> getMedianVals();
-  std::vector<T> getFitVals(int order=1);
+  std::vector<T> getFitVals(int order=1,float clip=5);
  
 
   int getNVal(std::string type,std::vector<float> &params);
@@ -204,7 +204,8 @@ public:
   void addChip(int ichip,Chip<T> *chip) { chips[ichip]=chip;}
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool add_size=false,bool 
-		    include_miss=false,bool use_dash=false,std::string exposure="");
+		    include_miss=false,bool use_dash=false,std::string suffix="psf.fits",
+		    std::string exposure="");
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);

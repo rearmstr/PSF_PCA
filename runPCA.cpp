@@ -13,11 +13,11 @@ std::ostream* dbgout = 0;
 bool XDEBUG = false;
 
 // principal component decomposition, can do svd or em
-template<class T1,class T2>
-void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
-           T2 &Svec,T1 &Vt,std::vector<std::vector<bool> > &missing,
+template<class T1,class T2,class T3>
+void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
+           T2 &Svec,T3 &Vt,std::vector<std::vector<bool> > &missing,
 	   bool use_em,int npc,
-	   int max_iter,double tol,bool do_missing,T1 &C,T1 &x)
+	   int max_iter,double tol,bool do_missing,T3 &C,T3 &x)
   
 {
   if(!use_em) {
@@ -59,8 +59,8 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
     Svec.resize(npc);
     U.resize(npc,npc);
 
-    //T1 C(nvar,npc);
-    //T1 x(npc,nexp);
+    //T3 C(nvar,npc);
+    //T3 x(npc,nexp);
     bool use_old=true;
 //     if(C.ncols()!=npc && C.nrows()!=nvar ) {
 //       && x.ncols()!=nexp && x.nrows()!=npc) {
@@ -157,10 +157,10 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
       // for no missing data can solve
       if(!do_missing ) {
 	FILE_LOG(logDEBUG)<<"Doing EM for all exposures "<<endl;
-	T1 tmp=C.transpose()*C;
+	T3 tmp=C.transpose()*C;
 	x=C.transpose()*data.transpose()/tmp;
 	
-	T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
+	T3 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
 	double diff=(Cnew-C).norm();
 	diff/=(Cnew.nrows()*Cnew.ncols());
 	FILE_LOG(logDEBUG1)<<"diff "<<diff<<" "<<tol<<endl;
@@ -195,7 +195,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 
 	  if(!cell_miss && 0) {
 	    
-	    T1 tmp=C.transpose()*C;
+	    T3 tmp=C.transpose()*C;
 	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*
 	      data.transpose().subMatrix(0,nvar,iexp,iexp+1)/tmp;
 	  }
@@ -203,13 +203,13 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 	    
 	    // resshuffle C into Cnew so that the cells with missing data are in the lowest rows
 	    // and cells with data are in the highest rows
-	    T1 Cnew(nvar,npc);
+	    T3 Cnew(nvar,npc);
 	    Cnew.setZero();
 	    int cur_missing=0;
 	    int cur_here=0;
 	    int nhere=nvar-nmiss;
-	    T1 Y(nhere,1); // actual data values
-	    T1 Dm(nmiss,1);// missing data
+	    T3 Y(nhere,1); // actual data values
+	    T3 Dm(nmiss,1);// missing data
 	    Y.setZero();
 	    Dm.setZero();
 	    FILE_LOG(logDEBUG1)<<"Missing "<<nmiss<<" here "<<nhere<<endl;
@@ -262,7 +262,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T1 &U,
 	
 	FILE_LOG(logDEBUG1)<<"Update data "<<data<<endl;
 	FILE_LOG(logDEBUG1)<<"Update x "<<x<<endl;
-	T1 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
+	T3 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
 	FILE_LOG(logDEBUG1)<<"Update C "<<Cnew<<endl;
 
 	double diff=(Cnew-C).norm();
@@ -415,6 +415,7 @@ int main(int argc,char*argv[])
   bool write_fits=params.read<bool>("write_fits",true);
   bool write_obj=params.read<bool>("write_obj",false);
   string read_fits=params.read<string>("read_fits","");
+  string suffix=params.read<string>("suffix","psf.fits");
   bool add_size=params.read<bool>("add_size",false);
   int shapestart=3;
 
@@ -429,6 +430,8 @@ int main(int argc,char*argv[])
   ifstream file(filename.c_str());  
   string name;
 
+  // take the cell boundaries from the first chip of the first exposure
+
   vector<string> exp_names;
   while(file>>name) {
     
@@ -440,7 +443,7 @@ int main(int argc,char*argv[])
     bool suc;
     if(shapelet) {
       suc=exp.readShapelet(dir+name+"/",nvar,add_size,
-			   do_em,use_dash,prefix+name);
+			   do_em,use_dash,suffix, prefix+name);
     }
     else {
       string fitsname=name;
@@ -471,25 +474,24 @@ int main(int argc,char*argv[])
     }
     if(suc) {
       exps.push_back(exp);
-      exp_names.push_back(name);
     }
  
     if(exps.size()>(max_exp-1) && max_exp>0) break;
   }
   
-  // take the cell boundaries from the first chip of the first exposure
-  int nccd=ccd;
-  if(skip61 && ccd>61) nccd-=1;
 
   int nexp=exps.size();
   // scale the number of variables to include the total number per exposure
-  
+
+  int nccd=ccd;
+  if(skip61 && ccd>61) nccd-=1;
   int nvar_tot=nvar*nx*ny*nccd;
   std::vector<float> vparams(1,0.);
-  
+
   if(type=="fit") {
     assert(fit_order>0);
     vparams[0]=fit_order; 
+    vparams.push_back(sigma_clip); 
     nvar_tot*=(fit_order+1)*(fit_order+2)/2;
     nvar*=(fit_order+1)*(fit_order+2)/2;
   }
@@ -501,6 +503,8 @@ int main(int argc,char*argv[])
 
   }
 
+
+
   // artificially remove data from each exposure
   if(add_missing>0 && add_missing <1) {
     for(int i=0;i<nexp;++i) {
@@ -508,31 +512,43 @@ int main(int argc,char*argv[])
     }
   }  
    
-
+  
   // Build the data matrix
-  DMatrix dataM(nexp,nvar_tot);
-
+  DMatrix data(nexp,nvar_tot);
   std::vector<std::vector<bool> > missing(nexp,
 					  std::vector<bool>(exps[0].getCells(),false));
+
   bool hasMissing=false;
+  int notMissing=0;
   for(int i=0;i<nexp;++i) {
 
+    name=exps[i].getLabel();
     DVector med=exps[i].getVals(type,vparams);
     missing[i]=exps[i].getMissing();
-    
+    bool isMissing=false;
     for(int j=0;j<missing[i].size();++j) {
       if(missing[i][j]){
 	hasMissing=true;
+	isMissing=true;
       }
-       
     }
-  
-    dataM.row(i)=med;
+
+    if(!isMissing || (do_em && use_missing)) {
+      exp_names.push_back(name);
+      notMissing++;
+    }
+    else {
+      FILE_LOG(logINFO)<<"Exposure "<<name<<" has missing data.  skipping..."
+		       <<endl;
+      exps[i].setOutlier(1);
+      continue;
+    }
+
+    data.row(notMissing-1)=med;
   }
-
-
-
-  // keep this around to write out full data matrix
+  nexp=notMissing;
+  DMatrixView dataM=data.rowRange(0,nexp);
+ 
   DMatrix original_data(nexp,nvar_tot);
   if(subtract_mean) original_data=dataM;
 
@@ -554,8 +570,8 @@ int main(int argc,char*argv[])
   DDiagMatrix Svec(1);
   DMatrix U(1,1),Vt(1,1);
   DMatrix C(1,1),x(1,1);
-  doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,nexp,U,Svec,Vt,missing,
-			     do_em,em_pc,max_iter,tol,hasMissing,C,x);
+  doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,nexp,U,Svec,Vt,missing,
+					 do_em,em_pc,max_iter,tol,hasMissing,C,x);
 
 
   if(hasMissing && do_em && use_missing) {
@@ -619,7 +635,7 @@ int main(int argc,char*argv[])
 
 	  missing.push_back(std::vector<bool>(exps[0].getCells(),false));
 	}
-	dataM.resize(nexp_cut,nvar_tot);
+	data.resize(nexp_cut,nvar_tot);
 	int cur_exp=0;
 	
 	hasMissing=false;
@@ -635,7 +651,7 @@ int main(int argc,char*argv[])
 	  cur_exp++;
 	  
 	}
-	
+	DMatrixView dataM=data.rowRange(0,cur_exp);
 	
 	// Remove mean from variables
 	if(subtract_mean) {
@@ -644,11 +660,11 @@ int main(int argc,char*argv[])
 	  original_data.resize(nexp_cut,nvar_tot);
 	  original_data=dataM;
 	  mean.resize(dataM.ncols());
-	  mean=meanRemove<DMatrix>(dataM,nvar,missing);
+	  mean=meanRemove<DMatrixView>(dataM,nvar,missing);
 	}
 	
-	doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,nexp_cut,U,Svec,Vt,missing,
-				   do_em,em_pc,max_iter,tol,hasMissing,C,x);    
+	doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,nexp_cut,U,Svec,Vt,missing,
+					       do_em,em_pc,max_iter,tol,hasMissing,C,x);    
 	
 
 	if(hasMissing && do_em ) {
@@ -705,12 +721,12 @@ int main(int argc,char*argv[])
       original_data.resize(cur_exp,nvar_tot);
       original_data=dataM;
       mean.resize(dataM.ncols());
-      mean=meanRemove<DMatrix>(dataM,nvar,missing);
+      mean=meanRemove<DMatrixView>(dataM,nvar,missing);
 
     }
     FILE_LOG(logINFO)<<"Redoing Decomposition "<<endl;
-    doPCD<DMatrix,DDiagMatrix>(dataM,nvar_tot,nvar,cur_exp,U,Svec,Vt,missing,
-			       do_em,em_pc,max_iter,tol,hasMissing,C,x); 
+    doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,cur_exp,U,Svec,Vt,missing,
+					   do_em,em_pc,max_iter,tol,hasMissing,C,x); 
 
     if(hasMissing && do_em) {
       for(int i=0;i<dataM.ncols();++i) {
@@ -1046,11 +1062,11 @@ int main(int argc,char*argv[])
     // write the matrices
     if(subtract_mean) {
       writeMatrixToFits<DMatrix>(fitfile,original_data,"data");
-      writeMatrixToFits<DMatrix>(fitfile,dataM,"data_mr");
+      writeMatrixToFits<DMatrixView>(fitfile,dataM,"data_mr");
       writeVectorToFits<DVector>(fitfile,mean,"mean");
     }
     else {
-      writeMatrixToFits<DMatrix>(fitfile,dataM,"data");
+      writeMatrixToFits<DMatrixView>(fitfile,dataM,"data");
     }
     writeMatrixToFits<DMatrix>(fitfile,dataR,"dataR");
     writeMatrixToFits<DMatrix>(fitfile,Vt,"vec");

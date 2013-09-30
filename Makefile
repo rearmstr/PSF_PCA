@@ -19,10 +19,11 @@ CXXFLAGS = -g -O3
 
 # for folio
 #-I/usr/global/cfitsio/include
-INCLUDE = -I${TMV_DIR}/include -I/global/homes/r/rarmst/soft/include
+#INCLUDE = -I${TMV_DIR}/include -I/global/homes/r/rarmst/soft/include 
+INCLUDE = -I${TMV_DIR}/include -I/usr/global/cfitsio/include -I/usr/global/CCfits/include
 LIBS = -L${TMV_DIR}/lib -ltmv -ltmv_symband -lmkl_intel_lp64 -lmkl_core   \
        -lmkl_sequential -lpthread -Wl,-rpath=/usr/global/tmv0.71/lib \
-       -openmp -L/global/homes/r/rarmst/soft/lib -lCCfits -lcfitsio
+       -openmp -L/usr/global/cfitsio/lib -L/usr/global/CCfits/lib -lCCfits -lcfitsio
 
 fileName=runPCA
 
