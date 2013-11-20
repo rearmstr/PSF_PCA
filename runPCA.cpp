@@ -7,6 +7,7 @@
 #include <cassert>
 #include "Log.h"
 #include "NR.h"
+#include "omp.h"
 using namespace std;
 using namespace PCA;
 std::ostream* dbgout = 0;
@@ -175,8 +176,12 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	//assert(missing.size()>1);
 	//x.setZero();
 	// Solve for each exposure independently.  Could add openmp here later
+
+#pragma omp parallel for shared(x,C,data)
+
 	for(int iexp=0;iexp<nexp;iexp++) {
 
+	  T3 xt(npc,nexp);
 	  bool cell_miss=false;
 	  // loop over cells to see if any data are missing for this exposure
 	  int nmiss=0;
@@ -193,7 +198,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 			      <<nmiss<<" variables"<<endl;
 	  }
 
-	  if(!cell_miss && 0) {
+	  if(!cell_miss) {
 	    
 	    T3 tmp=C.transpose()*C;
 	    x.subMatrix(0,npc,iexp,iexp+1)=C.transpose()*
@@ -239,7 +244,11 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	    // solve for x with known data points
 	    FILE_LOG(logDEBUG1)<<"data_good "<<Y<<endl;
 	    FILE_LOG(logDEBUG1)<<"Cnew_good "<<Cnew.subMatrix(nmiss,nvar,0,npc)<<endl;
-	    x.subMatrix(0,npc,iexp,iexp+1)=Y/Cnew.subMatrix(nmiss,nvar,0,npc);
+
+	    // This needs to be flagged
+	      x.subMatrix(0,npc,iexp,iexp+1)=Y/Cnew.subMatrix(nmiss,nvar,0,npc);
+
+
 	    FILE_LOG(logDEBUG1)<<" x_good:= "<<x.subMatrix(0,npc,iexp,iexp+1)<<endl;
 	    
 	    // calculate missing points from C and x
@@ -252,6 +261,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	      int icell=ivar/nvar_single;
 	      if (missing[iexp][icell]) { 
 		FILE_LOG(logDEBUG1)<<" Setting missing data  "<<ivar<<" "<<icell<<" "<<Dm(cur_missing,0)<<endl;
+
 		data(iexp,ivar)=Dm(cur_missing,0);
 		cur_missing++;
 	      }
@@ -259,7 +269,8 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	    
 	  }
 	}
-	
+
+
 	FILE_LOG(logDEBUG1)<<"Update data "<<data<<endl;
 	FILE_LOG(logDEBUG1)<<"Update x "<<x<<endl;
 	T3 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
@@ -417,8 +428,10 @@ int main(int argc,char*argv[])
   string read_fits=params.read<string>("read_fits","");
   string suffix=params.read<string>("suffix","psf.fits");
   bool add_size=params.read<bool>("add_size",false);
+  int threads=params.read<int>("threads",1);
   int shapestart=3;
 
+  omp_set_num_threads(threads);
 
   if(add_size) {
     nvar+=1;
