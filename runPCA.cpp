@@ -428,6 +428,9 @@ int main(int argc,char*argv[])
   string read_fits=params.read<string>("read_fits","");
   string suffix=params.read<string>("suffix","psf.fits");
   bool add_size=params.read<bool>("add_size",false);
+  bool read2=params.read<bool>("read2",false);
+  float readmax=params.read<float>("readmax",1);
+  string use_dir=params.read<string>("use_dir",".");
   int threads=params.read<int>("threads",1);
   int shapestart=3;
 
@@ -435,7 +438,7 @@ int main(int argc,char*argv[])
 
   if(add_size) {
     nvar+=1;
-    shapestart--;
+    //shapestart--;
   }
   FILELog::ReportingLevel() = FILELog::FromInt(logging);
   FILE_LOG(logINFO)<<"Settings...\n"<<params<<endl;
@@ -456,7 +459,11 @@ int main(int argc,char*argv[])
     bool suc;
     if(shapelet) {
       suc=exp.readShapelet(dir+name+"/",nvar,add_size,
-			   do_em,use_dash,suffix, prefix+name);
+			   do_em,use_dash,suffix, prefix+name,readmax,use_dir);
+//       if(read2) {
+// 	exp.readShapelet(dir+name+"/",nvar,add_size,
+// 			 do_em,use_dash,"psf2.fits", prefix+name,0.5);
+//       }
     }
     else {
       string fitsname=name;
@@ -1030,6 +1037,7 @@ int main(int argc,char*argv[])
     newTable->addKey("exp_cut",exp_cut,"exposure cut");
     newTable->addKey("order",fit_order,"fit order within cell");
     newTable->addKey("clip",sigma_clip,"sigma clip within cell");
+    newTable->addKey("add_size",add_size,"size included in vector");
     if(do_em) {
       newTable->addKey("em_pc",em_pc,"EM PCs");
       newTable->addKey("em_tol",tol,"EM tol erance");

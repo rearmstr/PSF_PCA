@@ -2,6 +2,9 @@
 #define ImageH
 #include "Bounds.h"
 #include "TMV.h"
+
+namespace pca {
+
 template <typename T> 
 class Image 
 {
@@ -131,3 +134,4 @@ extern template class Image<float>;
 
 #endif
 
+}

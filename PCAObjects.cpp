@@ -3,11 +3,17 @@
 #include "TMV.h"
 #include <sstream>
 #include "myTypeDef.h"
+#include "myIO.h"
 #include <cassert>
 #include "Log.h"
 #include "Image.h"
 #include "NR.h"
+#include <fstream>
+#include <algorithm>
+#include <cstdlib>
+
 namespace PCA {
+  int myrandom (int i) { return std::rand()%i;}
 
   using std::cout;
   using std::endl;
@@ -206,14 +212,14 @@ namespace PCA {
   {
     fitorder=order;
     int nfit=(fitorder+1)*(fitorder+2)/2;
-    int ndet=this->getNGood();
+    int ndet=dets.size();//this->getNGood();
     std::vector<T> v(nvar*nfit,defaultVal);    
 
 
 
     if(ndet<nfit) {
       FILE_LOG(logDEBUG1)<<"  this cell has more parameters than detections "
-			 <<ndet<<" "<<nfit<<".  "<<endl;
+			 <<ndet<<" "<<nfit<<".  Set as missing."<<endl;
       this->setMissing(true);
       return v;
     }
@@ -227,11 +233,12 @@ namespace PCA {
     // to reject.  We don't necesarily want to clip them because
     // they may be useful in better iterations
     std::vector<bool> use_det(ndet,true);
+
     for(int j=0;j<nvar;++j) {
 
       std::vector<T> tmp;     
       
-      for(int i=0;i<dets.size();++i) {
+      for(int i=0;i<ndet;++i) {
 	if(dets[i]->isClipped()) continue;
 	tmp.push_back(dets[i]->getVal(j));
       }
@@ -239,25 +246,30 @@ namespace PCA {
       double median=median_mad(tmp,mad);
 
       
-      for(int i=0;i<dets.size();++i) {
+      for(int i=0;i<ndet;++i) {
 	if(dets[i]->isClipped()) continue;
 
-	// check that is within 5 sigma
+	// check that is within clipped sigma sigma
 	if(std::fabs(dets[i]->getVal(j)-median)>clip*mad) {
-	   FILE_LOG(logDEBUG)<<"skipping "<<i<<" value to large "
-			     <<std::fabs(dets[i]->getVal(j)-median)/mad<<" sigma"<<endl;
- 	  use_det[i]=false;
+	  FILE_LOG(logDEBUG)<<"skipping "<<i<<" var "<<j<<" value to large "<<dets[i]->getVal(j)
+			    <<" "<<median<<" "
+			    <<std::fabs(dets[i]->getVal(j)-median)/mad<<" sigma"<<endl;
+	   use_det[i]=false;
 	}
+
 	
       }
     }
     
     int ndet_cur=0;
-    for(int i=0;i<dets.size();++i) if(use_det[i]) ndet_cur++;
+    for(int i=0;i<ndet;++i) {
+      if(dets[i]->isClipped()) continue;
+      if(use_det[i]) ndet_cur++;
+    }
 
     if(ndet_cur<nfit) {
       FILE_LOG(logDEBUG1)<<"  this cell has more parameters than detections "
-			 <<ndet<<" "<<nfit<<".  "<<endl;
+			 <<ndet_cur<<" "<<nfit<<".  "<<endl;
       this->setMissing(true);
       return v;
     }
@@ -549,7 +561,13 @@ namespace PCA {
     std::vector<bool> v(cells.size(),false);
 
     for(int i=0;i<cells.size();++i) {
-      if(cells[i]->isMissing()) v[i]=true;
+      if(cells[i]->isMissing()) {
+	FILE_LOG(logDEBUG)<<"At chip "<<label<<" cell "<<i
+			  <<" missing with "<<cells[i]->getNGood()
+			  <<" "<<endl;
+	v[i]=true;
+      }
+
     }
     return v;
   }
@@ -629,7 +647,7 @@ namespace PCA {
   template<class T>
   bool Exposure<T>::readShapelet(std::string dir,int nvar,bool add_size,
 				 bool include_miss,bool use_dash,string suffix,
-				 std::string exp) {
+				 std::string exp,float max,string used_dir) {
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
@@ -641,23 +659,30 @@ namespace PCA {
       std::vector<int>::iterator iter=find(skip.begin(),skip.end(),ichip);
       if(iter!=skip.end()) continue;
       
-      std::stringstream inputFile;
+      std::stringstream inputFile,usedFile;
       if(!use_dash) {
         inputFile << dir << "/" << exp << "_";
+	usedFile << used_dir<<"/" << exp << "_";
       }
       else {
         inputFile << dir << "/" << exp << "-";
+        usedFile << exp << "-";
       }
-      if(ichip<10) inputFile <<0;
-      
+      if(ichip<10) {
+	inputFile <<0;
+	usedFile <<0;
+      }
+
       if(!use_dash) {
         inputFile << ichip << "_"+suffix;
+        usedFile << ichip << "_used.fits";
       }
       else {
         inputFile << ichip << "-"+suffix;
       }
-
-
+      string outname=usedFile.str();
+      std::vector<Detection<T> *> dets;
+	
       try {
 	FILE_LOG(logDEBUG) << "opening file " << inputFile.str()<<endl;
         std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(inputFile.str(),CCfits::Read));
@@ -665,7 +690,13 @@ namespace PCA {
         CCfits::ExtHDU& table = pInfile->extension(1);
         
         long nTabRows=table.rows();
-	FILE_LOG(logDEBUG) << "found " << nTabRows<<" objects"<<endl;
+	FILE_LOG(logDEBUG) << "found " << int(nTabRows*max)<<" objects"<<endl;
+	// randomize index list because there is x,y dependence
+ 	std::vector<int> index(nTabRows);
+	for (int i=0; i<nTabRows; i++) index[i]=i;
+	//std::srand ( unsigned ( std::time(0) ) );
+	std::random_shuffle(index.begin(),index.end(),myrandom);
+	
         long start=1;
         long end=nTabRows;
         
@@ -681,34 +712,70 @@ namespace PCA {
         
         std::vector<long> order;       // shapelet order
         table.column("psf_order").read(order, start, end);
-        
         int icount=0;
-        for (int i=0; i<nTabRows; i++) {
-          if (!psf_flags[i]) {          // pass psf flags
-            
+
+	std::vector<int> used(nTabRows,0);
+        for (int i=0; i<nTabRows*max; i++) {
+          if (!psf_flags[index[i]]) {          // pass psf flags
+            used[index[i]]=1;
             int row=i+1;
-            Detection<T> *det=new Detection<T>(xpos[i],ypos[i],nvar);
-            int ncoeff=(order[i]+1)*(order[i]+2)/2;      // psf values
+            Detection<T> *det=new Detection<T>(xpos[index[i]],ypos[index[i]],nvar);
+            int ncoeff=(order[index[i]]+1)*(order[index[i]]+2)/2;      // psf values
             std::valarray<double> coeffs;
             table.column("shapelets").read(coeffs, row); 
-            FILE_LOG(logDEBUG1)<<"adding object "<<ichip<<" "<<xpos[i]<<" "
-                               <<ypos[i]<<" "<<coeffs[shapeStart]<<" "
+            FILE_LOG(logDEBUG1)<<"adding object "<<ichip<<" "<<xpos[index[i]]<<" "
+                               <<ypos[index[i]]<<" "<<coeffs[shapeStart]<<" "
                                <<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
-            for(int j=0;j<nvar;++j) {
-              
-              det->setVal(j,coeffs[shapeStart+j]);
-            }
+
+	    int last_index=nvar;
+	    int start_index=0;
             if(add_size) {
 	      FILE_LOG(logDEBUG1)<<"adding size "<<psf_size[0]<<endl;
 	      det->setVal(0,psf_size[0]);
+	      last_index--;
+	      start_index++;
 	    }
-            chip->addDet(det);
+
+            for(int j=0;j<last_index;++j) {
+	      FILE_LOG(logDEBUG2)<<"adding index var "<<start_index+j<<" "
+				 <<"from shapelet index "<<shapeStart+j<<" value:"
+				 <<coeffs[shapeStart+j]<<endl;
+	      det->setVal(start_index+j,coeffs[shapeStart+j]);
+            }
+
+            //chip->addDet(det);
+	    dets.push_back(det);
           }
         }
-        
+	
+	if(max<1) {
+
+	  // Maybe this should be moved to the main program and then we only need to
+	  // write out one file
+	  FILE_LOG(logDEBUG)<<"Writing out used objects "<<endl;
+
+	  FITS *fitfile=0;
+	  long naxis    =   2;      
+	  long naxes1[2] = { 1, 1 }; 
+	  fitfile=new FITS("!"+usedFile.str(),USHORT_IMG , naxis , naxes1 );
+	  // write the exposure information
+	  int nvar=1;
+	  int nrows=nTabRows;
+	  std::vector<string> colName(nvar,"");
+	  std::vector<string> colForm(nvar,"");
+	  std::vector<string> colUnit(nvar,"");
+	  colName[0] = "used";
+	  colForm[0] = "1J";
+	  colUnit[0] = "";
+
+	  Table* newTable = fitfile->addTable("Used",nrows,colName,colForm,colUnit);
+	  newTable->column(colName[0]).write(used,1);
+	  delete fitfile;
+	} 
+	
       }
       catch (CCfits::FitsException& ) {
-
+	
 	
         if(!include_miss) {
 	  FILE_LOG(logERROR)<<"Can't open chip: "<<inputFile.str()
@@ -720,8 +787,17 @@ namespace PCA {
 			    <<" from exposure "<<exp<<" will be set to missing"<<endl;
 	}
       }
-      addChip(ichip,chip);
-      
+    
+      if(chips.find(ichip)==chips.end()) {
+	FILE_LOG(logDEBUG2)<<"Could not find chip "<<ichip<<" creating new one"<<endl;
+	Chip<T> *chip=new Chip<T>(ichip,xmax_chip,ymax_chip);
+	chip->divide(nvar,nx_chip,ny_chip);
+	addChip(ichip,chip);
+      }
+      for(int i=0;i<dets.size();++i) {
+	chips[ichip]->addDet(dets[i]);
+      }
+	    
     }
 
     return true;
@@ -734,7 +810,7 @@ namespace PCA {
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
-      
+
       Chip<T> *chip=new Chip<T>(ichip,xmax_chip,ymax_chip);
       chip->divide(nvar,nx_chip,ny_chip);
 
@@ -770,9 +846,9 @@ namespace PCA {
 
       FILE_LOG(logDEBUG) << "Reading image file " << image_file<<endl;
 
-      Image<T> im (image_file,2); // main image
-      Image<T> wim(image_file,4); // weight image
-      Image<T> bpm(image_file,3); // bad pixel mask
+      pca::Image<T> im (image_file,2); // main image
+      pca::Image<T> wim(image_file,4); // weight image
+      pca::Image<T> bpm(image_file,3); // bad pixel mask
 
       FILE_LOG(logDEBUG) << "Reading psf file " << psf_file<<endl;
       std::vector<Position<T> > pos;

@@ -8,7 +8,7 @@
 #include "Image.h"
 #include <stdexcept>
 
-
+using namespace pca;
 struct FileNotFoundException : public std::runtime_error
 {
     FileNotFoundException(const std::string& filename) throw() :

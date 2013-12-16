@@ -2,7 +2,7 @@
 # GCC = g++
 # CXXFLAGS = -pg -g
 GCC = icpc
-CXXFLAGS = -g
+CXXFLAGS = -g -openmp
 
 # ============ MBPbnl =======================================================
 # INCLUDE = -I/Users/mzm/opt/include -I/usr/local/include/CCfits
