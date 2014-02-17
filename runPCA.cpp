@@ -915,6 +915,7 @@ int main(int argc,char*argv[])
       newTable->column(colName[5]).write(rcell,1);
       newTable->column(colName[6]).writeArrays(mvals,1);
       newTable->column(colName[7]).writeArrays(rvals,1);
+
       cur_exp++;
       
     }

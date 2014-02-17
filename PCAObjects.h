@@ -42,9 +42,13 @@ class Detection {
 
  public:
 
-  Detection(float x,float y,int nobs,double ra=-1,double dec=-1) :pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
+  Detection(float x,float y,int nobs,double ra=-1,double dec=-1) :
+    pos(x,y),vals(nobs,defaultVal),nval(nobs),clip(false) {}
   
   Position<float> getPos() {return pos;}
+  Position<double> getSky() {return sky;}
+  void setSky(Position<double> &_sky) {sky=_sky;}
+
   std::vector<T> getVals() {return vals;}
   std::valarray<T> getVVals() {
     std::valarray<T> v(vals.size());
@@ -206,8 +210,8 @@ public:
   bool readShapelet(std::string dir,int nvar,bool add_size=false,bool 
 		    include_miss=false,bool use_dash=false,std::string suffix="psf.fits",
 		    std::string exposure="",float max=1.0,
-		    std::string use_dir=".");
-  bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
+		    std::string use_dir=".",std::string cdir="");
+  bool readPixels(std::string dir,int npix,int nvar,std::string sdir, 
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);
   std::vector<bool> getMissing();

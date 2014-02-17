@@ -25,6 +25,7 @@ LIBS = -L/data2/home/rarmst/soft/tmv0.71_icpc/lib -ltmv -ltmv_symband -lmkl_inte
 
 fileName=runPCA
 fileName2=runPCAstar
+fileName3=ana
 
 all: $(fileName)
 clean:
@@ -45,6 +46,11 @@ $(fileName2).o: $(fileName2).cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName2).cpp $(INCLUDE)
 $(fileName2): runPCAstar.o $(OBJtmv) PCAObjects.o
 	$(GCC) $(CXXFLAGS) -o $(fileName2) runPCAstar.o $(OBJtmv) $(LIBS)
+
+$(fileName3).o: $(fileName3).cpp myClass.h
+	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName3).cpp $(INCLUDE)
+$(fileName3): ana.o $(OBJtmv) PCAObjects.o
+	$(GCC) $(CXXFLAGS) -o $(fileName3) ana.o $(OBJtmv) $(LIBS)
 
 testPCA.o: testPCA.cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ testPCA.cpp $(INCLUDE)

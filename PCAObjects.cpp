@@ -662,7 +662,7 @@ namespace PCA {
   template<class T>
   bool Exposure<T>::readShapelet(std::string dir,int nvar,bool add_size,
 				 bool include_miss,bool use_dash,string suffix,
-				 std::string exp,float max,string used_dir) {
+				 std::string exp,float max,string used_dir,string cdir) {
 
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
@@ -703,6 +703,33 @@ namespace PCA {
 	FILE_LOG(logDEBUG) << "opening file " << inputFile.str()<<endl;
         std::auto_ptr<CCfits::FITS> pInfile(new CCfits::FITS(inputFile.str(),CCfits::Read));
         
+
+
+	std::vector<Position<double> > skypos;
+	if(!cdir.empty()) {
+	  
+	  // erase extra zeros
+	  string cexp(exp);
+	  cexp.erase(6,2);
+	  
+	  std::stringstream inputFile2;
+	  inputFile2 << cdir << "/" << cexp<<"/"<<exp << "_";
+	  if(ichip<10) inputFile2 <<0;
+	  inputFile2 << ichip << "_cat.fits";      
+
+	  CCfits::FITS *catfile=new CCfits::FITS(inputFile2.str(),CCfits::Read);
+	  CCfits::ExtHDU& cattable = catfile->extension(2);
+	  long rows=cattable.rows();
+	  std::vector<double> ra,dec;
+	  cattable.column("ALPHAWIN_J2000").read(ra, 1, rows);
+	  cattable.column("DELTAWIN_J2000").read(dec, 1, rows);
+
+	  for(int i=0;i<rows;++i) {
+	    skypos.push_back(Position<double>(ra[i],dec[i]));
+	  }
+	  
+	}
+
         CCfits::ExtHDU& table = pInfile->extension(1);
         
         long nTabRows=table.rows();
@@ -716,6 +743,7 @@ namespace PCA {
         long start=1;
         long end=nTabRows;
         
+        std::vector<int> id;
         std::vector<int> psf_flags;
 	std::vector<double> psf_size;
         std::vector<double> xpos;
@@ -725,6 +753,13 @@ namespace PCA {
         table.column("sigma_p").read(psf_size, start, end);
         table.column("x").read(xpos, start, end);
         table.column("y").read(ypos, start, end);
+
+	if(!cdir.empty()) {
+	  table.column("id").read(id, start, end);
+	}
+
+
+	  
         
         std::vector<long> order;       // shapelet order
         table.column("psf_order").read(order, start, end);
@@ -759,7 +794,10 @@ namespace PCA {
 	      det->setVal(start_index+j,coeffs[shapeStart+j]);
             }
 
-            //chip->addDet(det);
+	    if(!cdir.empty()) {
+	      det->setSky(skypos[id[i]-1]);
+	    }
+
 	    dets.push_back(det);
           }
         }
