@@ -205,7 +205,8 @@ public:
   int nSkip() {return skip.size();}
   bool readShapelet(std::string dir,int nvar,bool add_size=false,bool 
 		    include_miss=false,bool use_dash=false,std::string suffix="psf.fits",
-		    std::string exposure="",float max=1.0,std::string use_dir=".");
+		    std::string exposure="",float max=1.0,
+		    std::string use_dir=".");
   bool readPixels(std::string dir,int npix,int nvar,std::string sdir,
 		  bool use_dash=false,std::string exposure="");
   tmv::Vector<T> getVals(std::string type,std::vector<float> &params);

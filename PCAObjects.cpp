@@ -58,6 +58,7 @@ namespace PCA {
     for(int i=0;i<dets.size();++i) {
       if(!dets[i]->isClipped()) ngood++;
     }
+
     return ngood;
   }
 
@@ -77,9 +78,13 @@ namespace PCA {
 
     int ngood=this->getNGood();
     std::vector<T> v(nvar,defaultVal);
-    if (ngood==0) {
+    if (ngood==0 ) {
        FILE_LOG(logDEBUG1)<<"  this cell does not have at least one detections. "<<endl;
        this->setMissing(true);
+       return v;
+    }
+    if (this->isMissing() ) {
+       FILE_LOG(logDEBUG1)<<"  this cell has been labeled missing. "<<endl;
        return v;
     }
 
@@ -141,6 +146,12 @@ namespace PCA {
     std::vector<T> v(nvar,defaultVal);
     FILE_LOG(logDEBUG1)<<"   Meanclips with :"<<dets.size()<<endl;
     int ngood=this->getNGood();
+
+    if (this->isMissing() ) {
+       FILE_LOG(logDEBUG1)<<"  this cell has been labeled missing. "<<endl;
+       return v;
+    }
+
     if(ngood<1) {
       FILE_LOG(logDEBUG1)<<"  this cell does not have at least one detections. "<<endl;
       this->setMissing(1);
@@ -215,7 +226,10 @@ namespace PCA {
     int ndet=dets.size();//this->getNGood();
     std::vector<T> v(nvar*nfit,defaultVal);    
 
-
+    if (this->isMissing() ) {
+       FILE_LOG(logDEBUG1)<<"  this cell has been labeled missing. "<<endl;
+       return v;
+    }
 
     if(ndet<nfit) {
       FILE_LOG(logDEBUG1)<<"  this cell has more parameters than detections "
@@ -521,6 +535,7 @@ namespace PCA {
   {
     int ngood=0;
     for(int i=0;i<cells.size();++i) ngood+=cells[i]->getNGood();
+
     return ngood;
   }
 
@@ -648,6 +663,7 @@ namespace PCA {
   bool Exposure<T>::readShapelet(std::string dir,int nvar,bool add_size,
 				 bool include_miss,bool use_dash,string suffix,
 				 std::string exp,float max,string used_dir) {
+
     if (exp.empty()) exp=label;
     FILE_LOG(logINFO) << "Reading exposure " << exp<<endl;
     for(int ichip=1;ichip<=nchip;++ichip) {
@@ -694,7 +710,7 @@ namespace PCA {
 	// randomize index list because there is x,y dependence
  	std::vector<int> index(nTabRows);
 	for (int i=0; i<nTabRows; i++) index[i]=i;
-	//std::srand ( unsigned ( std::time(0) ) );
+
 	std::random_shuffle(index.begin(),index.end(),myrandom);
 	
         long start=1;
@@ -706,7 +722,7 @@ namespace PCA {
         std::vector<double> ypos;
         
         table.column("psf_flags").read(psf_flags, start, end);
-        table.column("sigma_p").read(psf_size, start, start+1);
+        table.column("sigma_p").read(psf_size, start, end);
         table.column("x").read(xpos, start, end);
         table.column("y").read(ypos, start, end);
         
@@ -716,28 +732,28 @@ namespace PCA {
 
 	std::vector<int> used(nTabRows,0);
         for (int i=0; i<nTabRows*max; i++) {
-          if (!psf_flags[index[i]]) {          // pass psf flags
+          if (psf_flags[index[i]]==0) {          // pass psf flags
             used[index[i]]=1;
-            int row=i+1;
+            int row=index[i]+1;
             Detection<T> *det=new Detection<T>(xpos[index[i]],ypos[index[i]],nvar);
             int ncoeff=(order[index[i]]+1)*(order[index[i]]+2)/2;      // psf values
             std::valarray<double> coeffs;
             table.column("shapelets").read(coeffs, row); 
-            FILE_LOG(logDEBUG1)<<"adding object "<<ichip<<" "<<xpos[index[i]]<<" "
+            FILE_LOG(logDEBUG1)<<"adding object at row "<<i<<" chip: "<<ichip<<" "<<xpos[index[i]]<<" "
                                <<ypos[index[i]]<<" "<<coeffs[shapeStart]<<" "
                                <<coeffs[shapeStart+1]<<" "<<coeffs[shapeStart+2]<<" "<<endl;
 
 	    int last_index=nvar;
 	    int start_index=0;
             if(add_size) {
-	      FILE_LOG(logDEBUG1)<<"adding size "<<psf_size[0]<<endl;
-	      det->setVal(0,psf_size[0]);
+	      FILE_LOG(logDEBUG1)<<"adding size "<<psf_size[index[i]]<<endl;
+	      det->setVal(0,psf_size[index[i]]);
 	      last_index--;
 	      start_index++;
 	    }
 
             for(int j=0;j<last_index;++j) {
-	      FILE_LOG(logDEBUG2)<<"adding index var "<<start_index+j<<" "
+	      FILE_LOG(logDEBUG1)<<"adding index var "<<start_index+j<<" "
 				 <<"from shapelet index "<<shapeStart+j<<" value:"
 				 <<coeffs[shapeStart+j]<<endl;
 	      det->setVal(start_index+j,coeffs[shapeStart+j]);
@@ -796,8 +812,9 @@ namespace PCA {
       }
       for(int i=0;i<dets.size();++i) {
 	chips[ichip]->addDet(dets[i]);
+
       }
-	    
+      FILE_LOG(logDEBUG2)<<"Chip "<<ichip<<" has "<<chips[ichip]->getNGood()<<" stars"<<endl;
     }
 
     return true;
@@ -1025,17 +1042,26 @@ namespace PCA {
   {
     typename std::map<int,Chip<T>*>::const_iterator iter=chips.begin();
     int cur=0;
-    std::vector<std::vector<double> > diff_all;
+    
     FILE_LOG(logDEBUG)<<"Exposure "<<label<<" outlier "<<endl;
 
     int ichip=0;
     int nperchip;
     int nvartot;
+    int nvar=chips.begin()->second->getCell(0)->getNVar();
+    std::vector<std::vector<double> > diff_all;
+    std::vector<std::vector<double> > mdiff_all;
+    for(int i=0;i<nvar;++i) {
+      std::vector<double> tmp;
+      diff_all.push_back(tmp);
+      mdiff_all.push_back(tmp);
+    }
+
     // compute median and deviation for the exposure
     for(; iter!=chips.end();++iter,++ichip) {
 
       if(ichip==0) {
-	nvar=iter->second->getCell(0)->getNVar();
+	
 	nperchip=nx_chip*ny_chip*nvar;
 	nvartot=nvar;
 	if(type=="fit") {
@@ -1044,7 +1070,7 @@ namespace PCA {
 	  nperchip*=order;
 	}
       }
-
+    
       
       tmv::ConstVectorView<T> data_chip=data_r.subVector(ichip*nperchip,(ichip+1)*nperchip);
 
@@ -1054,7 +1080,8 @@ namespace PCA {
 
 	
 	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvartot,(icell+1)*nvartot);
-		
+	
+
 	// do not test missing data that was added later or that may have -999
 	if(iter->second->getCell(icell)->isMissing()) continue;
 	
@@ -1062,15 +1089,24 @@ namespace PCA {
 	std::vector<std::vector<double> > diff=
 	  iter->second->getCell(icell)->getDiff(data_cell,type,params,d1,d2,false);
 
+	std::vector<double> meas=iter->second->getCell(icell)->getVals(type,params);
+	for(int j=0;j<nvar;++j) {
+	  FILE_LOG(logDEBUG)<<"  ivar_meas "<<j<<" vcell1_meas "<<icell<<" :"
+			    <<meas[j]<<endl;
+	  mdiff_all[j].push_back(meas[j]);
+	}
+      
+
 	for(int ivar=0;ivar<nvar;++ivar) {
 	  std::vector<double> tmp;
-
+	  
 	  copy(diff[ivar].begin(),diff[ivar].end(),std::back_inserter(tmp));
 	  double dmad;
 	  double dmedian=median_mad(tmp,dmad);
 	  FILE_LOG(logDEBUG)<<"  ivar "<<ivar<<" vcell1 "<<icell<<" :"
 			    <<dmedian<<" "<<dmad<<endl;
-	  diff_all.push_back(tmp);
+	  diff_all[ivar].push_back(dmedian);
+	  
 	}
 	
       }
@@ -1079,9 +1115,13 @@ namespace PCA {
     // now remove outliers
     std::vector<double> mad(nvar);
     std::vector<double> median(nvar);
+    std::vector<double> mad_m(nvar);
+    std::vector<double> median_m(nvar);
     for(int ivar=0;ivar<nvar;++ivar) {
       median[ivar]=median_mad(diff_all[ivar],mad[ivar]);
+      median_m[ivar]=median_mad(mdiff_all[ivar],mad_m[ivar]);
       FILE_LOG(logDEBUG)<<"   ivar "<<ivar<<" totalres1: "<<median[ivar]<<" :"<<mad[ivar]<<endl;
+      FILE_LOG(logDEBUG)<<"   ivar_m "<<ivar<<" totalres1: "<<median_m[ivar]<<" :"<<mad_m[ivar]<<endl;
     }
 
     iter=chips.begin();
@@ -1094,26 +1134,37 @@ namespace PCA {
 	tmv::ConstVectorView<T> data_cell=data_chip.subVector(icell*nvartot,(icell+1)*nvartot);
 	if(iter->second->getCell(icell)->isMissing()) continue;
 
-	
+	std::vector<double> d1,d2;
 	std::vector<std::vector<double> > diff=
-	  iter->second->getCell(icell)->getDiff(data_cell,type,params,
-						median,mad, true,sigma);
+	  iter->second->getCell(icell)->getDiff(data_cell,type,params,d1,d2,false);
+
+	std::vector<double> meas=iter->second->getCell(icell)->getVals(type,params);
+
 	
-	for(int ivar=0;ivar<nvar;++ivar) {
+	for(int ivar=1;ivar<nvar;++ivar) {
 	  std::vector<double> tmp;
 	  copy(diff[ivar].begin(),diff[ivar].end(),std::back_inserter(tmp));
 	  double dmad;
-	  double dmedian=median_mad(diff[ivar],dmad);
-	  diff_all.push_back(tmp);
-	  FILE_LOG(logDEBUG)<<"  ivar "<<ivar<<"vcell2 "<<icell<<" :"<<dmedian<<" "<<dmad<<endl;
+	  double dmedian=median_mad(tmp,dmad);
+	  if(std::fabs(dmedian-median[ivar])>5*mad[ivar]) {
+	    iter->second->getCell(icell)->setMissing(1);
+	    FILE_LOG(logDEBUG)<<" Found cell outlier in difference  "<<icell<<" : "<<dmedian<<" "<<median[ivar]<<" "
+			      <<mad[ivar]<<" "<<endl;
+	    break;
+	  }
+	  
+	  if(std::fabs(meas[ivar]-median_m[ivar])>5*mad_m[ivar]) {
+	    iter->second->getCell(icell)->setMissing(1);
+	    FILE_LOG(logDEBUG)<<" Found cell outlier in measurment  "<<icell<<" : "<<meas[ivar]<<" "<<median_m[ivar]<<" "
+			      <<mad_m[ivar]<<" "<<endl;
+	    break;
+	  }
+
 	}
       }
     }
     
-    for(int ivar=0;ivar<nvar;++ivar) {
-      median[ivar]=median_mad(diff_all[ivar],mad[ivar]);
-      FILE_LOG(logDEBUG)<<"   ivar "<<ivar<<" totalres2: "<<median[ivar]<<" :"<<mad[ivar]<<endl;
-    }
+
     return median;
     
   }

@@ -24,6 +24,7 @@ LIBS = -L/data2/home/rarmst/soft/tmv0.71_icpc/lib -ltmv -ltmv_symband -lmkl_inte
        -openmp -L/usr/global/CCfits/lib -lCCfits -L/usr/global/CCfits/lib -lcfitsio
 
 fileName=runPCA
+fileName2=runPCAstar
 
 all: $(fileName)
 clean:
@@ -39,6 +40,21 @@ $(fileName).o: $(fileName).cpp myClass.h
 	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName).cpp $(INCLUDE)
 $(fileName): runPCA.o $(OBJtmv) PCAObjects.o
 	$(GCC) $(CXXFLAGS) -o $(fileName) runPCA.o $(OBJtmv) $(LIBS)
+
+$(fileName2).o: $(fileName2).cpp myClass.h
+	$(GCC) $(CXXFLAGS) -c -o $@ $(fileName2).cpp $(INCLUDE)
+$(fileName2): runPCAstar.o $(OBJtmv) PCAObjects.o
+	$(GCC) $(CXXFLAGS) -o $(fileName2) runPCAstar.o $(OBJtmv) $(LIBS)
+
+testPCA.o: testPCA.cpp myClass.h
+	$(GCC) $(CXXFLAGS) -c -o $@ testPCA.cpp $(INCLUDE)
+testPCA: testPCA.o $(OBJtmv) PCAObjects.o
+	$(GCC) $(CXXFLAGS) -o testPCA testPCA.o $(OBJtmv) $(LIBS)
+
+testPCA2.o: testPCA2.cpp myClass.h
+	$(GCC) $(CXXFLAGS) -c -o $@ testPCA2.cpp $(INCLUDE)
+testPCA2: testPCA2.o $(OBJtmv) PCAObjects.o
+	$(GCC) $(CXXFLAGS) -o testPCA2 testPCA2.o $(OBJtmv) $(LIBS)
 
 getCoeff.o: getCoeff.cpp 
 	$(GCC) $(CXXFLAGS) -c -o $@ getCoeff.cpp $(INCLUDE)

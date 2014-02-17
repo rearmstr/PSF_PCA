@@ -8,17 +8,19 @@
 #include "Log.h"
 #include "NR.h"
 #include "omp.h"
+#include "Random.h"
 using namespace std;
 using namespace PCA;
+using namespace ran;
 std::ostream* dbgout = 0;
 bool XDEBUG = false;
 
 // principal component decomposition, can do svd or em
 template<class T1,class T2,class T3>
 void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
-           T2 &Svec,T3 &Vt,std::vector<std::vector<bool> > &missing,
+           T2 &Svec,T3 &Vt,const std::vector<std::vector<bool> > &missing,
 	   bool use_em,int npc,
-	   int max_iter,double tol,bool do_missing,T3 &C,T3 &x)
+	   int max_iter,int min_iter,double tol,bool do_missing,T3 &C,T3 &x)
   
 {
   if(!use_em) {
@@ -105,6 +107,8 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
       // use a random subset of data equal to the number of pcs to
       // give an initial solution via svd
       // select a random set of exposures to initialize the solution
+
+
       vector<int> rands;
       while(rands.size()<npc) {
 	int n=ran01()*nexp;
@@ -137,22 +141,24 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
     }
     else if (!use_old) {
       FILE_LOG(logINFO)<<"Not enough full exposures.  Using random starting matrix"<<endl;
+      GaussianDeviate gaus;
       for(int i=0;i<nvar;++i) {
 	for(int j=0;j<npc;++j) {
-	  C(i,j)=ran01();
+	  C(i,j)=gaus()*0.01;
 	}
       }
       
       for(int i=0;i<npc;++i) {
-	for(int j=0;j<nexp;++j) {
-	  x(i,j)=ran01();
+	for(int j=0;j<npc;++j) {
+	  x(i,j)=gaus()*0.01;
 	}
       }
     }
       
     
-    FILE_LOG(logDEBUG)<<"Initial C:"<<C<<endl;
-    
+    FILE_LOG(logDEBUG1)<<"Initial C:"<<C<<endl;
+    FILE_LOG(logDEBUG1)<<"Initial x:"<<x<<endl;
+    double prev_diff=1e10;
     for(int iter=0;iter<max_iter;++iter) {
 
       // for no missing data can solve
@@ -165,10 +171,17 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	double diff=(Cnew-C).norm();
 	diff/=(Cnew.nrows()*Cnew.ncols());
 	FILE_LOG(logDEBUG1)<<"diff "<<diff<<" "<<tol<<endl;
-	if(diff<tol) break;
+
 	FILE_LOG(logINFO)<<"EM iteration "<<iter<<" diff "
-			 <<diff<<" "<<tol<<endl;
+			 <<diff<<" "<<std::abs(diff-prev_diff)/prev_diff
+			 <<" "<<tol<<endl;
+
 	C=Cnew;
+	if(iter>min_iter && 
+	   (diff<tol || std::abs(diff-prev_diff)/(prev_diff)<tol) ) break;
+	prev_diff=diff;
+
+
       
       }
       else {
@@ -195,7 +208,7 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	  }
 	  if(iter==0) {
 	    FILE_LOG(logDEBUG)<<"Exposure "<<iexp<<" missing "
-			      <<nmiss<<" variables"<<endl;
+	    	      <<nmiss<<" variables"<<endl;
 	  }
 
 	  if(!cell_miss) {
@@ -217,20 +230,20 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	    T3 Dm(nmiss,1);// missing data
 	    Y.setZero();
 	    Dm.setZero();
-	    FILE_LOG(logDEBUG1)<<"Missing "<<nmiss<<" here "<<nhere<<endl;
+	    //FILE_LOG(logDEBUG1)<<"Missing "<<nmiss<<" here "<<nhere<<endl;
 	    for(int ivar=0;ivar<nvar;++ivar) {
 	      int icell=ivar/nvar_single;
 
-	      FILE_LOG(logDEBUG1)<<"Variable "<<ivar<<" cell: "<<icell<<endl;
+	      //FILE_LOG(logDEBUG1)<<"Variable "<<ivar<<" cell: "<<icell<<endl;
 	      if (missing[iexp][icell]) {
-		FILE_LOG(logDEBUG1)<<" is missing "<<data(iexp,ivar)<<endl;
+		//FILE_LOG(logDEBUG1)<<" is missing "<<data(iexp,ivar)<<endl;
 		
 		Cnew.subMatrix(cur_missing,cur_missing+1,
 			       0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
 		cur_missing++;
 	      }
 	      else {
-		FILE_LOG(logDEBUG1)<<" is not missing "<<data(iexp,ivar)<<endl;
+		//FILE_LOG(logDEBUG1)<<" is not missing "<<data(iexp,ivar)<<endl;
 	
 		Cnew.subMatrix(nmiss+cur_here,nmiss+cur_here+1,
 			       0,npc)=C.subMatrix(ivar,ivar+1,0,npc);
@@ -276,11 +289,18 @@ void doPCD(T1 &data,int nvar,int nvar_single,int nexp,T3 &U,
 	T3 Cnew=data.transpose()*x.transpose()%(x*x.transpose());
 	FILE_LOG(logDEBUG1)<<"Update C "<<Cnew<<endl;
 
-	double diff=(Cnew-C).norm();
-	diff/=(Cnew.nrows()*Cnew.ncols());
-	FILE_LOG(logINFO)<<"EM iteration "<<iter<<" diff "<<diff<<" "<<tol<<endl;
-	if(diff<tol) break;
+	double diff=((Cnew*x).transpose()-data).norm();
+	diff/=(data.nrows()*data.ncols());
+	
+	FILE_LOG(logINFO)<<"EM iteration "<<iter<<" diff "
+			 <<diff<<" "<<std::abs(diff-prev_diff)/prev_diff
+			 <<" "<<tol<<endl;
+	
 	C=Cnew;
+	if(iter>min_iter && 
+	   (diff<tol || std::abs(diff-prev_diff)/(prev_diff)<tol) ) break;
+	prev_diff=diff;
+
       }
     }
       
@@ -348,7 +368,7 @@ int identifyOutliers(T &m,vector<bool> &outliers,float cut)
 
 // remove the mean of each column
 template<class T,class T2>
-DVector meanRemove(const T &m,int nvar,const T2 &missing)
+DVector meanRemove(T &m,int nvar,const T2 &missing)
 {
   DVector mean(m.ncols());
 
@@ -364,12 +384,9 @@ DVector meanRemove(const T &m,int nvar,const T2 &missing)
     mean(i)=sum/ntot;
   }
       
-//   for(int i=0;i<m.ncols();++i) {
-
-//     double sum=m.col(i).sumElements();
-//     m.col(i).addToAll(-sum/m.nrows());
-//     mean(i)=sum/m.nrows();
-//   }
+  for(int i=0;i<m.ncols();++i) {
+    m.col(i).addToAll(-mean(i));
+  }
 
   return mean;
 }
@@ -419,6 +436,7 @@ int main(int argc,char*argv[])
   bool rm_zero=params.read<bool>("rm_zero",true);
   bool do_em=params.read<bool>("do_em",true);
   int max_iter=params.read<int>("max_iter",1000);
+  int min_iter=params.read<int>("min_iter",100);
   int em_pc=params.read<int>("em_pc",20);
   float tol=params.read<float>("tol",1e-6);
   float add_missing=params.read<float>("add_missing",-1);
@@ -432,9 +450,14 @@ int main(int argc,char*argv[])
   float readmax=params.read<float>("readmax",1);
   string use_dir=params.read<string>("use_dir",".");
   int threads=params.read<int>("threads",1);
+  int seed=params.read<int>("seed",11111);
   int shapestart=3;
 
   omp_set_num_threads(threads);
+
+  if ( seed==0) seed=unsigned (std::time(0));
+  std::srand(seed);
+
 
   if(add_size) {
     nvar+=1;
@@ -459,11 +482,8 @@ int main(int argc,char*argv[])
     bool suc;
     if(shapelet) {
       suc=exp.readShapelet(dir+name+"/",nvar,add_size,
-			   do_em,use_dash,suffix, prefix+name,readmax,use_dir);
-//       if(read2) {
-// 	exp.readShapelet(dir+name+"/",nvar,add_size,
-// 			 do_em,use_dash,"psf2.fits", prefix+name,0.5);
-//       }
+			   do_em,use_dash,suffix, prefix+name,readmax
+			   ,use_dir);
     }
     else {
       string fitsname=name;
@@ -474,7 +494,7 @@ int main(int argc,char*argv[])
       suc=exp.readPixels(image_dir+fitsname+"/",npix,nvar,
 			 dir+name+"/",use_dash,prefix+name);
     }
-
+    
     vector<bool> missing_vec(exp.getCells(),false);
     missing_vec=exp.getMissing();
     bool missing=false;
@@ -535,8 +555,8 @@ int main(int argc,char*argv[])
   
   // Build the data matrix
   DMatrix data(nexp,nvar_tot);
-  std::vector<std::vector<bool> > missing(nexp,
-					  std::vector<bool>(exps[0].getCells(),false));
+  std::vector<std::vector<bool> > 
+    missing(nexp,std::vector<bool>(exps[0].getCells(),false));
 
   bool hasMissing=false;
   int notMissing=0;
@@ -546,6 +566,7 @@ int main(int argc,char*argv[])
     DVector med=exps[i].getVals(type,vparams);
     missing[i]=exps[i].getMissing();
     bool isMissing=false;
+    
     for(int j=0;j<missing[i].size();++j) {
       if(missing[i][j]){
 	hasMissing=true;
@@ -557,6 +578,7 @@ int main(int argc,char*argv[])
       exp_names.push_back(name);
       notMissing++;
     }
+
     else {
       FILE_LOG(logINFO)<<"Exposure "<<name<<" has missing data.  skipping..."
 		       <<endl;
@@ -584,6 +606,16 @@ int main(int argc,char*argv[])
   DVector mean(dataM.ncols());
   if(subtract_mean) mean=meanRemove(dataM,nvar,missing);
 
+
+  // Try to reject bad
+  for(int i=0;i<nexp;++i) {
+    if(exps[i].isOutlier()) continue;
+    DVector data_exp=original_data.row(i);
+
+      vector<double> ave_res=exps[i].outlierReject(data_exp,obj_sigma_clip,type,vparams);
+  }   
+
+
   
   if(hasMissing && !use_missing) hasMissing=false;
   // matrices for svd
@@ -591,18 +623,20 @@ int main(int argc,char*argv[])
   DMatrix U(1,1),Vt(1,1);
   DMatrix C(1,1),x(1,1);
   doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,nexp,U,Svec,Vt,missing,
-					 do_em,em_pc,max_iter,tol,hasMissing,C,x);
+					 do_em,em_pc,max_iter,min_iter,tol,hasMissing,C,x);
 
-
+  
   if(hasMissing && do_em && use_missing) {
     for(int i=0;i<dataM.ncols();++i) {
-      if(subtract_mean) {
-	original_data.col(i)=dataM.col(i).addToAll(mean(i));
-      }
-      else {
-	original_data.col(i)=dataM.col(i);
-      }
+      for(int j=0;j<dataM.nrows();++j) {
+	if(subtract_mean) {
+	  original_data(j,i)=dataM(j,i)+mean(i);
+	}
+	else {
+	  original_data(j,i)=dataM(j,i);
+	}
 	
+      }
     }
   }
 
@@ -684,20 +718,23 @@ int main(int argc,char*argv[])
 	}
 	
 	doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,nexp_cut,U,Svec,Vt,missing,
-					       do_em,em_pc,max_iter,tol,hasMissing,C,x);    
+					       do_em,em_pc,max_iter,min_iter,tol,hasMissing,C,x);    
 	
 
 	if(hasMissing && do_em ) {
 	  for(int i=0;i<dataM.ncols();++i) {
-	    if(subtract_mean) {
-	      original_data.col(i)=dataM.col(i).addToAll(mean(i));
-	    }
-	    else {
-	      original_data.col(i)=dataM.col(i);
+	    for(int j=0;j<dataM.nrows();++j) {
+	      if(subtract_mean) {
+		original_data(j,i)=dataM(j,i)+mean(i);
+	      }
+	      else {
+		original_data(j,i)=dataM(j,i);
+	      }
+	      
 	    }
 	  }
 	}
-
+	
 	outlier_iter++;
       }
     } while (noutlier>0 && outlier_iter<max_outlier_iter);
@@ -745,9 +782,12 @@ int main(int argc,char*argv[])
 
     }
     FILE_LOG(logINFO)<<"Redoing Decomposition "<<endl;
+    //C.resize(1,1);
+    //x.resize(1,1);
     doPCD<DMatrixView,DDiagMatrix,DMatrix>(dataM,nvar_tot,nvar,cur_exp,U,Svec,Vt,missing,
-					   do_em,em_pc,max_iter,tol,hasMissing,C,x); 
+					   do_em,em_pc,max_iter,min_iter,tol,hasMissing,C,x); 
 
+    // You need to update data matrix with new values if doing EM
     if(hasMissing && do_em) {
       for(int i=0;i<dataM.ncols();++i) {
 	if(subtract_mean) {
@@ -764,18 +804,25 @@ int main(int argc,char*argv[])
   }
   
   DMatrix dataR=U*Svec*Vt;
+  if(subtract_mean) {
+    for(int i=0;i<dataR.ncols();i++) dataR.col(i).addToAll(mean(i));
+  }
+
+  // probably don't want to write these out because we will want to test
+  // with different number of PC's
   if (write_obj) {
     // write the residual exposure information
-    vector<int> rexp;//exposure number
-    vector<int> rccd;
-    vector<bool> rclip;
-    vector<int> rcell;
-    vector<float> rx;
-    vector<float> ry;
-    vector<valarray<double> > mvals;
-    vector<valarray<double> > rvals;
+
     int cur_exp=0;
     for(int iexp=0;iexp<nexp;++iexp) {
+      vector<int> rexp;//exposure number
+      vector<int> rccd;
+      vector<bool> rclip;
+      vector<int> rcell;
+      vector<float> rx;
+      vector<float> ry;
+      vector<valarray<double> > mvals;
+      vector<valarray<double> > rvals;
       if(exps[iexp].isOutlier()) continue;
       //cout<<iexp<<endl;
       DVector data_r=dataR.row(cur_exp);
@@ -790,7 +837,7 @@ int main(int argc,char*argv[])
 
 	tmv::ConstVectorView<double> data_chip=data_r.subVector(cchip*nperchip,
 								(cchip+1)*nperchip);
-
+	
 	for(int icell=0;icell<exps[iexp].getChip(ichip)->getNCell();++icell) {
 	  //cout<<"    "<<icell<<endl;
 	  tmv::ConstVectorView<double> data_cell=
@@ -813,66 +860,65 @@ int main(int argc,char*argv[])
 	    rclip.push_back(det->isClipped());
 	    rvals.push_back(rv[idet]);
 	    mvals.push_back(det->getVVals());
-	    delete det;
+	    
 	  }
 	}
 	cchip++;
       }
+    
+
+      FITS *rfitfile=0;
+      long naxis    =   2;      
+      long naxes1[2] = { 1, 1 }; 
+      rfitfile=new FITS("!r_"+outname+"_"+exps[iexp].getLabel()+".fits",USHORT_IMG , naxis , naxes1 );
+      // write the exposure information
+      int nwvar=8;
+      int nrows=rexp.size();
+      std::vector<string> colName(nwvar,"");
+      std::vector<string> colForm(nwvar,"");
+      std::vector<string> colUnit(nwvar,"");
+      colName[0] = "exposure";
+      colName[1] = "x";
+      colName[2] = "y";
+      colName[3] = "ccd";
+      colName[4] = "clip";
+      colName[5] = "cell";
+      colName[6] = "mval";
+      colName[7] = "rval";
+      
+      std::stringstream v_form;
+      v_form << nvar << "D";
+      
+      colForm[0] = "1J";
+      colForm[1] = "1E";
+      colForm[2] = "1E";
+      colForm[3] = "1J";
+      colForm[4] = "1I";
+      colForm[5] = "1J";
+      colForm[6] = v_form.str();
+      colForm[7] = v_form.str();
+      
+      colUnit[0] = "";
+      colUnit[1] = "";
+      colUnit[2] = "";
+      colUnit[3] = "";
+      colUnit[4] = "";
+      colUnit[5] = "";
+      colUnit[6] = "";
+      colUnit[7] = "";
+      Table* newTable = rfitfile->addTable("residuals",nrows,colName,colForm,colUnit);
+      newTable->column(colName[0]).write(rexp,1);
+      newTable->column(colName[1]).write(rx,1);
+      newTable->column(colName[2]).write(ry,1);
+      newTable->column(colName[3]).write(rccd,1);
+      newTable->column(colName[4]).write(rclip,1);
+      newTable->column(colName[5]).write(rcell,1);
+      newTable->column(colName[6]).writeArrays(mvals,1);
+      newTable->column(colName[7]).writeArrays(rvals,1);
       cur_exp++;
-
+      
+    }
   }
-	    
-  FITS *rfitfile=0;
-  long naxis    =   2;      
-  long naxes1[2] = { 1, 1 }; 
-  rfitfile=new FITS("!r_"+outname+".fits",USHORT_IMG , naxis , naxes1 );
-  // write the exposure information
-  int nwvar=8;
-  int nrows=rexp.size();
-  std::vector<string> colName(nwvar,"");
-  std::vector<string> colForm(nwvar,"");
-  std::vector<string> colUnit(nwvar,"");
-  colName[0] = "exposure";
-  colName[1] = "x";
-  colName[2] = "y";
-  colName[3] = "ccd";
-  colName[4] = "clip";
-  colName[5] = "cell";
-  colName[6] = "mval";
-  colName[7] = "rval";
-
-  std::stringstream v_form;
-  v_form << nvar << "D";
-
-  colForm[0] = "1J";
-  colForm[1] = "1E";
-  colForm[2] = "1E";
-  colForm[3] = "1J";
-  colForm[4] = "1I";
-  colForm[5] = "1J";
-  colForm[6] = v_form.str();
-  colForm[7] = v_form.str();
-
-  colUnit[0] = "";
-  colUnit[1] = "";
-  colUnit[2] = "";
-  colUnit[3] = "";
-  colUnit[4] = "";
-  colUnit[5] = "";
-  colUnit[6] = "";
-  colUnit[7] = "";
-  Table* newTable = rfitfile->addTable("residuals",nrows,colName,colForm,colUnit);
-  newTable->column(colName[0]).write(rexp,1);
-  newTable->column(colName[1]).write(rx,1);
-  newTable->column(colName[2]).write(ry,1);
-  newTable->column(colName[3]).write(rccd,1);
-  newTable->column(colName[4]).write(rclip,1);
-  newTable->column(colName[5]).write(rcell,1);
-  newTable->column(colName[6]).writeArrays(mvals,1);
-  newTable->column(colName[7]).writeArrays(rvals,1);
-  
-  
-  }  
 
 
 
@@ -1041,7 +1087,8 @@ int main(int argc,char*argv[])
     if(do_em) {
       newTable->addKey("em_pc",em_pc,"EM PCs");
       newTable->addKey("em_tol",tol,"EM tol erance");
-      newTable->addKey("em_iter",max_iter,"EM maximum iterations");
+      newTable->addKey("em_iter_max",max_iter,"EM maximum iterations");
+      newTable->addKey("em_iter_min",min_iter,"EM maximum iterations");
     }
     
 
@@ -1093,7 +1140,8 @@ int main(int argc,char*argv[])
     writeMatrixToFits<DMatrix>(fitfile,Vt,"vec");
     writeMatrixToFits<DMatrix>(fitfile,U,"coeff");
     writeVectorToFits<DVector>(fitfile,Svec.diag(),"singular");
-        
+    writeVVectorToFits<bool>(fitfile,missing,"missing");
+    
   }
   
   if(fitfile) delete fitfile;

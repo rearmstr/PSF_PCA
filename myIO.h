@@ -52,6 +52,32 @@ ExtHDU* writeMatrixToFits(FITS* file,const T &mat,string name)
   ext->write(fpixel,n,data);
   return ext;
 }
+
+template<class T>
+ExtHDU* writeVVectorToFits(FITS* file,const std::vector<std::vector<T> > &vec,
+			   string name)
+{
+  std::vector<long> ax(2,0);
+  
+  ax[0]=vec.size();
+  ax[1]=vec[0].size();
+  int n=ax[0]*ax[1];
+
+  std::valarray<float> data(n);
+  int c=0;
+  for(int i=0;i<ax[0];++i) {
+    for(int j=0;j<ax[1];++j) {
+
+      int in=ax[0]*j+i;
+      data[in]=int(vec[i][j]);
+    }
+  }
+  
+  ExtHDU* ext = file->addImage(name,FLOAT_IMG,ax);
+  long fpixel(1);
+  ext->write(fpixel,n,data);
+  return ext;
+}
 template< class T>
 ExtHDU* writeVectorToFits(FITS* file,const T &vec,string name)
 {
@@ -67,6 +93,7 @@ ExtHDU* writeVectorToFits(FITS* file,const T &vec,string name)
   ext->write(fpixel,n,data);
   return ext;
 }
+
 
 template<class T>
 void readMatrixFromFits(FITS* file,string name,T &mat)
