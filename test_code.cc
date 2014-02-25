@@ -63,14 +63,6 @@ int main()
   pca2.solve();
   pca.writeFits("test2.fits");
 
-//    vector<Cell> g;
-//   g.push_back(c);
-//   Cell g2=c;
-//   Cell g3(c);
-//   cout<<c.getData()<<" "<<g3.getData()<<endl;
-//   vector<vector<Cell> > vg;
-//   vg.push_back(g);
-//   cout<<*vg[0][0].getDet(0)<<endl;
 
 } 
  
